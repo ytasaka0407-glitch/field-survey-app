@@ -169,6 +169,14 @@
         color: var(--muted);
         opacity: 1; /* Safari等で薄すぎるのを防ぐ */
       }
+      /* 「Excelから読み込み」ボタンを薄い緑に */
+      #importExcelBtn {
+        background: #a7f3d0;      /* 薄いミント系の緑 */
+        border-color: #a7f3d0;
+        color: #064e3b;           /* 読みやすい濃い緑の文字色 */
+      }
+      #importExcelBtn:hover { filter: brightness(0.96); }
+      #importExcelBtn:active { transform: scale(0.98); }
     </style>
   </head>
   <body>
