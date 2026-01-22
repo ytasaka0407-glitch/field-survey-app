@@ -989,19 +989,17 @@
         wsCover.getCell('A3').value = '現地調査報告書';
         wsCover.getCell('A3').style = titleStyle;
 
-        wsCover.getCell('A8').value = '案件名';
-        wsCover.getCell('A8').style = labelStyle;
-        wsCover.mergeCells('B8:H8');
-        wsCover.getCell('B8').value = title;
-        wsCover.getCell('B8').font  = { name: 'Meiryo UI' };
+        wsCover.getCell('G8').value = '案件名';
+        wsCover.getCell('G8').style = labelStyle;
+        wsCover.getCell('H8').value = title;
+        wsCover.getCell('H8').font  = { name: 'Meiryo UI' };
 
-        wsCover.getCell('A10').value = '日付';
-        wsCover.getCell('A10').style = labelStyle;
-        wsCover.mergeCells('B10:H10');
-        wsCover.getCell('B10').value    = coverDate;      // Date型
-        wsCover.getCell('B10').numFmt   = 'yyyy/mm/dd';   // 表示形式
-        wsCover.getCell('B10').font     = { name: 'Meiryo UI' };
-        wsCover.getCell('B10').alignment = { horizontal: 'left' }; // 左寄せ
+        wsCover.getCell('G10').value = '日付';
+        wsCover.getCell('G10').style = labelStyle;
+        wsCover.getCell('H10').value    = coverDate;      // Date型
+        wsCover.getCell('H10').numFmt   = 'yyyy/mm/dd';   // 表示形式
+        wsCover.getCell('H10').font     = { name: 'Meiryo UI' };
+        wsCover.getCell('H10').alignment = { horizontal: 'left' }; // 左寄せ
 
         // 目次
         const wsToc = wb.addWorksheet('目次', {
@@ -1053,7 +1051,6 @@
           ws.getCell('A1').style = sectionTitleStyle;
 
           ws.getCell('A3').value = '調査日'; ws.getCell('A3').style = labelStyle;
-          ws.mergeCells('B3:J3');
           const d = fromInputDate(v.date || projectDateStr);
           if (d) {
             ws.getCell('B3').value  = d;               // Date型
