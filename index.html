@@ -5,9 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>現地調査レポート作成</title>
 
-    <!-- ExcelJS（.xlsx生成） -->
+    <!-- PWA manifest -->
+    <link rel="manifest" href="./manifest.webmanifest">
+    <meta name="theme-color" content="#2d7ef7">
+
+    <!-- iOS向け（任意） -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="./icons/icon-192.png">
+
+    <!-- ExcelJS（ローカル配置に変更） -->
     <script src="./lib/exceljs.min.js"></script>
-    <!-- FileSaver（ダウンロード） -->
+    <!-- FileSaver（ローカル配置に変更） -->
     <script src="./lib/FileSaver.min.js"></script>
 
     <style>
@@ -19,31 +28,29 @@
         --primary: #2d7ef7;
         --success: #2fa36b;
         --border: #e5e7eb;
+        --danger: #c0392b;
       }
       * { box-sizing: border-box; }
       html, body {
-        margin: 0; padding: 0;
-        background: var(--bg); color: var(--text);
+        margin: 0; padding: 0; background: var(--bg); color: var(--text);
         font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
       }
       .app-header, .app-footer {
-        background: var(--card);
-        border-bottom: 1px solid var(--border);
-        padding: 12px 16px;
+        background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px;
       }
       .app-footer { border-top: 1px solid var(--border); border-bottom: none; text-align: center; }
       .container { max-width: 980px; margin: 0 auto; padding: 16px; }
 
       .card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 16px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+        padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
       }
       h1, h2, h3 { margin: 0 0 12px; }
-      .form-row { display: grid; grid-template-columns: 140px 1fr; gap: 10px; align-items: center; margin-bottom: 10px; }
+      .muted { color: var(--muted); font-size: 12px; }
+
+      .form-row {
+        display: grid; grid-template-columns: 140px 1fr; gap: 10px; align-items: center; margin-bottom: 10px;
+      }
       .form-row label { color: var(--muted); }
       input[type="text"], input[type="date"], textarea {
         width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font-size: 16px;
@@ -51,30 +58,56 @@
       textarea { min-height: 96px; resize: vertical; } /* 高さのみ変更可能（幅は固定） */
       .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
       .btn {
-        padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
-        background: #fff; color: var(--text); font-size: 16px; cursor: pointer;
+        padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--text); font-size: 16px; cursor: pointer;
       }
       .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
       .btn.success { background: var(--success); color: #fff; border-color: var(--success); }
+      .btn.danger { color: #fff; background: var(--danger); border-color: var(--danger); }
       .btn:active { transform: scale(0.98); }
 
-      .category-list { display: flex; flex-wrap: wrap; gap: 10px 16px; }
-      .category-item { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px; }
+      .category-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .category-list { display: flex; flex-direction: column; gap: 10px; }
+      .category-item {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        background: #fff; border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px;
+      }
+      .category-left { display: flex; align-items: center; gap: 8px; }
+      .badge {
+        font-size: 11px; color: #555; background: #eef2ff; border: 1px solid #dbe2ff; border-radius: 999px; padding: 2px 8px;
+      }
+      .category-actions { display:flex; align-items:center; gap:6px; }
+      .icon-btn {
+        border:none; background:transparent; cursor:pointer; color:#999; font-size:16px; line-height:1;
+      }
+      .icon-btn:hover { color:#666; }
+
+      .add-category {
+        display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px;
+      }
+
+      /* 共有基地局マネージャ */
+      .shared-stations {
+        margin-top: 16px;
+        border: 1px dashed var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        background: #fafbff;
+      }
+      .station-list {
+        display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+      }
+      .station-chip {
+        display: inline-flex; align-items: center; gap: 8px;
+        border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 6px 10px;
+      }
+      .station-chip .name { font-size: 14px; }
+      .station-chip .remove { border: none; background: transparent; color: var(--danger); cursor: pointer; }
 
       .photos { margin-top: 8px; }
-      .photo-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 10px;
-      }
-      .photo-item {
-        background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
-      }
+      .photo-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+      .photo-item { background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
       .photo-item img { width: 100%; height: 120px; object-fit: cover; display: block; }
-      .photo-item .caption {
-        padding: 8px;
-        border-top: 1px solid var(--border);
-      }
+      .photo-item .caption { padding: 8px; border-top: 1px solid var(--border); }
       .photo-item .caption input {
         width: 100%; font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
       }
@@ -82,12 +115,59 @@
         padding: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted);
       }
       .photo-item .remove {
-        background: transparent; border: none; color: #c0392b; cursor: pointer; font-size: 12px;
+        background: transparent; border: none; color: var(--danger); cursor: pointer; font-size: 12px;
       }
 
+      .station-block {
+        border: 1px dashed var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        margin: 10px 0 16px 0;
+        background: #fafbff;
+      }
+      .station-header {
+        display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px;
+      }
+      .station-title { font-weight: bold; }
+
+      .subsection-title {
+        font-weight: bold;
+        margin: 12px 0 4px 0;
+      }
+
+      /* 常時表示のフローティング操作バー */
+      .floating-controls {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 1000;
+        background: rgba(255,255,255,0.95);
+        border: 1px solid var(--border);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+        border-radius: 12px;
+        padding: 10px;
+        display: flex;
+        gap: 8px;
+        backdrop-filter: saturate(1.2) blur(4px);
+      }
+      @media (max-width: 720px) {
+        .floating-controls {
+          left: 8px; right: 8px; bottom: 8px; justify-content: space-between;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .category-groups { grid-template-columns: 1fr; }
+      }
       @media (max-width: 720px) {
         .form-row { grid-template-columns: 1fr; }
-        .btn { width: 100%; }
+        .add-category { grid-template-columns: 1fr; }
+      }
+      /* placeholder をはっきり灰色で表示 */
+      input::placeholder,
+      textarea::placeholder {
+        color: var(--muted);
+        opacity: 1; /* Safari等で薄すぎるのを防ぐ */
       }
     </style>
   </head>
@@ -97,182 +177,476 @@
     </header>
 
     <main class="container">
-      <!-- 案件全体の情報（表紙） -->
+      <!-- 案件全体の情報 -->
       <section class="card">
-        <h2>案件情報（表紙）</h2>
+        <h2>案件情報（エクセル表紙）</h2>
         <div class="form-row">
           <label for="projectTitle">案件名</label>
-          <input id="projectTitle" type="text" placeholder="例：〇〇地区現地調査" />
+          <input id="projectTitle" type="text" placeholder="例：西いぶり、神戸など" />
         </div>
         <div class="form-row">
-          <label for="projectDate">調査日（全項目へ自動反映／後から個別変更可）</label>
+          <label for="projectDate">調査日</label>
           <input id="projectDate" type="date" />
         </div>
       </section>
 
-      <!-- カテゴリ選択 -->
+      <!-- 項目選択 -->
       <section class="card">
-        <h2>カテゴリ選択（目次・カテゴリ別シートに反映）</h2>
-        <div class="category-list" id="categorySelectArea"></div>
-        <div style="margin-top:10px; display:flex; gap:8px;">
-          <input id="newCategoryInput" type="text" placeholder="カテゴリを追加（例：外構・電気・配管など）" />
-          <button id="addCategoryBtn" class="btn">カテゴリを追加</button>
+        <h2>項目選択（エクセル目次・項目別シートに反映）</h2>
+
+        <div class="category-groups" id="categorySelectArea">
+          <!-- JSで「指令センター項目」「基地局項目」それぞれのチェック群を描画 -->
+        </div>
+
+        <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div>
+            <div class="muted">指令センター項目を追加</div>
+            <div class="add-category">
+              <input id="newSingleCategoryInput" type="text" placeholder="" />
+              <button id="addSingleCategoryBtn" class="btn">追加</button>
+            </div>
+          </div>
+          <div>
+            <div class="muted">基地局項目を追加</div>
+            <div class="add-category">
+              <input id="newMultiCategoryInput" type="text" placeholder="" />
+              <button id="addMultiCategoryBtn" class="btn">追加</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 共有 基地局 管理 -->
+        <div class="shared-stations" id="sharedStationsManager">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+            <div style="font-weight:bold;">基地局入力</div>
+            <div style="display:flex; gap:8px; flex:1 1 420px;">
+              <input id="newStationInput" type="text" placeholder="基地局名を入力" />
+              <button id="addStationBtn" class="btn">基地局を追加</button>
+            </div>
+          </div>
+          <div class="station-list" id="stationList"></div>
+          <div class="muted" style="margin-top:6px;">追加した基地局は、すべての基地局項目が自動で反映され、入力は「基地局単位」で行います。</div>
         </div>
       </section>
 
-      <!-- 選択したカテゴリの入力ブロック -->
+      <!-- 入力 -->
       <section class="card">
-        <h2>カテゴリ別入力</h2>
-        <div id="categoriesContainer"></div>
-      </section>
-
-      <!-- 操作 -->
-      <section class="card">
-        <h2>操作</h2>
-        <div class="buttons">
-          <button id="saveBtn" class="btn">下書きを保存</button>
-          <button id="loadBtn" class="btn">下書きを読み込み</button>
-          <button id="exportExcelBtn" class="btn success">Excelにエクスポート</button>
+        <h2>調査結果入力欄</h2>
+        <div id="singleCatsContainer"></div>
+        <hr style="border:none; border-top:1px solid var(--border); margin:16px 0;">
+        <div>
+          <h3 style="margin-bottom:8px;">基地局別</h3>
+          <div id="multiStationsContainer"></div>
         </div>
-        <p style="color:var(--muted); font-size:12px; margin-top:8px;">
-          ヒント：Excelは端末にダウンロードされます。<br/>
-          調査日（表紙）を入力すると各カテゴリに自動反映され、必要に応じて個別で上書きできます。
-        </p>
       </section>
     </main>
+
+    <!-- 常時表示の操作バー -->
+    <div class="floating-controls">
+      <button id="saveBtn" class="btn">下書きを保存</button>
+      <button id="loadBtn" class="btn">下書きを読み込み</button>
+      <button id="exportExcelBtn" class="btn success">Excelにエクスポート</button>
+    </div>
 
     <footer class="app-footer">
       <small>© 現地調査レポートツール</small>
     </footer>
 
     <script>
-      // 初期カテゴリ
-      const defaultCategories = ['外観', '内装', '設備', '安全衛生'];
+      // 既定項目（指令センター）
+      const defaultSingleCategories = ["01.無線回線制御装置", "02.高機能遠隔制御装置", "03.管理監視制御卓", "04.プリンタ", "05.L3SW(無線系)", "06.無線指令受付装置", "07.署所端末受令機", "08.避雷器", "09.共用器", "10.アンテナ", "11.DC/ACインバータ", "12.非常用発電機", "13.直流電源装置", "14.無停電電源装置"];
+      // 既定項目（基地局）
+      const defaultMultiCategories = ["01.基地局_無線装置", "02.基地局_L3SW(無線系)", "03.基地局_卓上型固定移動局", "04.基地局_署所端末受令機", "05.基地局_避雷器", "06.基地局_共用器", "07.基地局_アンテナ", "08.基地局_DC/ACインバータ", "09.基地局_非常用発電機", "10.基地局_直流電源装置", "11.基地局_無停電電源装置", "12.基地局_耐雷トランス"];
 
-      // 状態：選択中カテゴリとデータ
-      // dataMap[cat] = { date:'', location:'', details:'', photos:[{dataUrl,name,caption}] }
+      // デフォルトヒント（必要なら使う）
+      const multiCategoryDefaults = {
+        // "アンテナ": { location: "設置する箇所をなるべく詳細に記載", details: "型式／方向／高さ／支持方法／劣化状況など" }
+      };
+
+      // データ構造
+      // dataMap[cat] = { mode:'single', date, location, details, photos }
+      // dataMap[cat] = { mode:'multi', stationData: { [stationId]: { date, location, details, photos } } }
       const dataMap = {};
       const selectedCategories = new Set();
 
+      // 基地局リスト
+      let sharedStations = [];
+
       // 参照
-      const projectTitleEl = document.getElementById('projectTitle');
-      const projectDateEl = document.getElementById('projectDate');
-      const categorySelectArea = document.getElementById('categorySelectArea');
-      const newCategoryInput = document.getElementById('newCategoryInput');
-      const addCategoryBtn = document.getElementById('addCategoryBtn');
-      const categoriesContainer = document.getElementById('categoriesContainer');
-      const saveBtn = document.getElementById('saveBtn');
-      const loadBtn = document.getElementById('loadBtn');
-      const exportExcelBtn = document.getElementById('exportExcelBtn');
+      const projectTitleEl = document.getElementById("projectTitle");
+      const projectDateEl  = document.getElementById("projectDate");
+      const categorySelectArea = document.getElementById("categorySelectArea");
+      const newSingleCategoryInput = document.getElementById("newSingleCategoryInput");
+      const addSingleCategoryBtn = document.getElementById("addSingleCategoryBtn");
+      const newMultiCategoryInput = document.getElementById("newMultiCategoryInput");
+      const addMultiCategoryBtn = document.getElementById("addMultiCategoryBtn");
+      const singleCatsContainer = document.getElementById("singleCatsContainer");
+      const multiStationsContainer = document.getElementById("multiStationsContainer");
+      const saveBtn = document.getElementById("saveBtn");
+      const loadBtn = document.getElementById("loadBtn");
+      const exportExcelBtn = document.getElementById("exportExcelBtn");
+      const newStationInput = document.getElementById("newStationInput");
+      const addStationBtn = document.getElementById("addStationBtn");
+      const stationListEl = document.getElementById("stationList");
 
-      // 前回の表紙調査日（自動反映の上書き判定用）
-      let projectDatePrev = '';
-
-      // カテゴリ選択UIの描画
-      function renderCategorySelector() {
-        categorySelectArea.innerHTML = '';
-        const allCats = [...new Set([...defaultCategories, ...Object.keys(dataMap)])].sort((a,b)=>a.localeCompare(b,'ja'));
-        allCats.forEach(cat => {
-          const id = 'cat_' + hashId(cat);
-          const wrapper = document.createElement('label');
-          wrapper.className = 'category-item';
-          wrapper.innerHTML = `
-            <input type="checkbox" id="${id}" ${selectedCategories.has(cat) ? 'checked':''}>
-            <span>${cat}</span>
-          `;
-          wrapper.querySelector('input').addEventListener('change', (e) => {
-            if (e.target.checked) {
-              selectCategory(cat);
-            } else {
-              deselectCategory(cat);
-            }
-          });
-          categorySelectArea.appendChild(wrapper);
+      // ユーティリティ
+      function sanitizeSheetName(name) {
+        const invalid = /[\\\/\?\*\[\]\:]/g;
+        let n = (name || "").replace(invalid, " ").trim();
+        if (!n) n = "シート";
+        if (n.length > 31) n = n.slice(0, 31);
+        return n;
+      }
+      function makeUniqueSheetName(base, used) {
+        let n = base;
+        let i = 2;
+        while (used.has(n)) {
+          const suffix = ` (${i})`;
+          const core = base.slice(0, 31 - suffix.length);
+          n = core + suffix;
+          i++;
+        }
+        return n;
+      }
+      function formatDate(d) {
+        const y = d.getFullFullYear ? d.getFullFullYear() : d.getFullYear(); // Safari対策（環境によりgetFullFullYearは未定義）
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      }
+      function hashId(str) {
+        let h = 0;
+        for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+        return Math.abs(h).toString(36);
+      }
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
+      }
+      function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
         });
       }
-
-      // カテゴリ選択
-      function selectCategory(cat) {
-        if (!dataMap[cat]) {
-          dataMap[cat] = { date:'', location:'', details:'', photos:[] };
-        }
-        // 初期表示時、カテゴリの日付が空で表紙調査日があるなら初期値として反映
-        if (!dataMap[cat].date && projectDateEl.value) {
-          dataMap[cat].date = projectDateEl.value;
-        }
-        selectedCategories.add(cat);
-        renderCategories();
+      function resizeImage(dataUrl, maxWidth) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const scale = Math.min(1, maxWidth / img.width);
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            const out = canvas.toDataURL("image/jpeg", 0.85);
+            resolve(out);
+          };
+          img.src = dataUrl;
+        });
+      }
+      function stationIdFromName(name) {
+        return "st_" + hashId((name || "").trim().toLowerCase());
       }
 
-      // カテゴリ選択解除
-      function deselectCategory(cat) {
-        selectedCategories.delete(cat);
-        const el = document.getElementById('catBlock_' + hashId(cat));
-        if (el) el.remove();
-        renderCategorySelector(); // チェック状態更新
-      }
-
-      addCategoryBtn.addEventListener('click', () => {
-        const name = (newCategoryInput.value || '').trim();
-        if (!name) return;
-        if (!dataMap[name]) dataMap[name] = { date:'', location:'', details:'', photos:[] };
-        // 初期値反映
-        if (!dataMap[name].date && projectDateEl.value) {
-          dataMap[name].date = projectDateEl.value;
-        }
-        selectedCategories.add(name);
-        newCategoryInput.value = '';
-        renderCategorySelector();
-        renderCategories();
-      });
-
-      // 表紙の調査日変更 → 各カテゴリへ自動反映（ただし個別変更は保持）
-      projectDateEl.addEventListener('change', (e) => {
-        const newDate = e.target.value || '';
-        [...selectedCategories].forEach(cat => {
-          const v = dataMap[cat] || (dataMap[cat] = { date:'', location:'', details:'', photos:[] });
-          // 以前の表紙日付と同一、または未設定のものだけ更新（個別上書きは保持）
-          if (!v.date || v.date === projectDatePrev) {
-            v.date = newDate;
-            const idBase = hashId(cat);
-            const dateInput = document.getElementById('date_' + idBase);
-            if (dateInput) dateInput.value = newDate;
+      // 表紙の調査日自動反映（個別上書きは保持）
+      let projectDatePrev = "";
+      projectDateEl.addEventListener("change", (e) => {
+        const newDate = e.target.value || "";
+        Object.keys(dataMap).forEach(cat => {
+          const mode = dataMap[cat]?.mode || "single";
+          if (mode === "single") {
+            const v = ensureSingle(cat);
+            if (!v.date || v.date === projectDatePrev) {
+              v.date = newDate;
+              const idBase = hashId(cat);
+              const dateInput = document.getElementById("date_" + idBase);
+              if (dateInput) dateInput.value = newDate;
+            }
+          } else {
+            ensureMulti(cat);
+            const sd = dataMap[cat].stationData || {};
+            Object.keys(sd).forEach(stId => {
+              const s = sd[stId];
+              if (!s.date || s.date === projectDatePrev) {
+                s.date = newDate;
+                const idBase = hashId(cat + "|" + stId);
+                const dateInput = document.getElementById("date_" + idBase);
+                if (dateInput) dateInput.value = newDate;
+              }
+            });
           }
         });
         projectDatePrev = newDate;
       });
 
-      // カテゴリ別入力ブロックの描画
-      function renderCategories() {
-        categoriesContainer.innerHTML = '';
-        [...selectedCategories].forEach(cat => {
-          categoriesContainer.appendChild(buildCategoryBlock(cat));
+      // モード確保
+      function ensureSingle(cat) {
+        const cur = dataMap[cat];
+        if (!cur) {
+          dataMap[cat] = { mode: "single", date: projectDateEl.value || "", location: "", details: "", photos: [] };
+        } else if (cur.mode === undefined) {
+          cur.mode = "single";
+          cur.date = cur.date || projectDateEl.value || "";
+          cur.location = cur.location || "";
+          cur.details = cur.details || "";
+          cur.photos = Array.isArray(cur.photos) ? cur.photos : [];
+        }
+        return dataMap[cat];
+      }
+      function ensureMulti(cat) {
+        const cur = dataMap[cat];
+        if (!cur || cur.mode !== "multi") {
+          dataMap[cat] = { mode: "multi", stationData: {} };
+        } else if (!cur.stationData) {
+          cur.stationData = {};
+        }
+        // 共有基地局に合わせて stationData のエントリ作成（初期日付は表紙の調査日）
+        sharedStations.forEach(st => {
+          if (!dataMap[cat].stationData[st.id]) {
+            dataMap[cat].stationData[st.id] = {
+              date: projectDateEl.value || "",
+              location: "",
+              details: "",
+              photos: [],
+            };
+          }
         });
-        renderCategorySelector(); // 選択状態の同期
+        return dataMap[cat];
+      }
+      function getOrInitStationData(cat, stationId) {
+        const v = ensureMulti(cat);
+        if (!v.stationData[stationId]) {
+          v.stationData[stationId] = {
+            date: projectDateEl.value || "",
+            location: "",
+            details: "",
+            photos: [],
+          };
+        }
+        return v.stationData[stationId];
       }
 
-      // カテゴリ入力ブロック生成
-      function buildCategoryBlock(cat) {
-        const idBase = hashId(cat);
-        const block = document.createElement('div');
-        block.className = 'card';
-        block.id = 'catBlock_' + idBase;
+      // 項目選択UI
+      function renderCategorySelector() {
+        const singles = [];
+        const multis = [];
+        Object.keys(dataMap).forEach((cat) => {
+          const m = dataMap[cat]?.mode || "single";
+          if (m === "multi") multis.push(cat);
+          else singles.push(cat);
+        });
+        singles.sort((a, b) => a.localeCompare(b, "ja"));
+        multis.sort((a, b) => a.localeCompare(b, "ja"));
 
+        categorySelectArea.innerHTML = "";
+
+        const singleCol = document.createElement("div");
+        const multiCol = document.createElement("div");
+        singleCol.innerHTML = `<h3 style="margin-bottom:8px;">指令センター項目</h3>`;
+        multiCol.innerHTML = `<h3 style="margin-bottom:8px;">基地局項目</h3>`;
+
+        const singleList = document.createElement("div"); singleList.className = "category-list";
+        const multiList = document.createElement("div");  multiList.className = "category-list";
+
+        singles.forEach((cat) => {
+          const id = "cat_" + hashId("single|" + cat);
+          const wrapper = document.createElement("div");
+          wrapper.className = "category-item";
+          wrapper.innerHTML = `
+            <div class="category-left">
+              <input type="checkbox" id="${id}" ${selectedCategories.has(cat) ? "checked" : ""}>
+              <span>${escapeHtml(cat)}</span>
+            </div>
+            <div class="category-actions">
+              ${defaultSingleCategories.includes(cat) ? "" : `<button class="icon-btn" title="削除">🗑️</button>`}
+            </div>
+          `;
+          wrapper.querySelector("input").addEventListener("change", (e) => {
+            if (e.target.checked) selectCategory(cat); else deselectCategory(cat);
+          });
+          const delBtn = wrapper.querySelector(".icon-btn");
+          if (delBtn) {
+            delBtn.addEventListener("click", () => {
+              if (confirm(`項目「${cat}」を削除しますか？（入力済みデータも削除されます）`)) {
+                deleteCategory(cat);
+              }
+            });
+          }
+          singleList.appendChild(wrapper);
+        });
+
+        multis.forEach((cat) => {
+          const id = "cat_" + hashId("multi|" + cat);
+          const wrapper = document.createElement("div");
+          wrapper.className = "category-item";
+          wrapper.innerHTML = `
+            <div class="category-left">
+              <input type="checkbox" id="${id}" ${selectedCategories.has(cat) ? "checked" : ""}>
+              <span>${escapeHtml(cat)}</span>
+            </div>
+            <div class="category-actions">
+              ${defaultMultiCategories.includes(cat) ? "" : `<button class="icon-btn" title="削除">🗑️</button>`}
+            </div>
+          `;
+          wrapper.querySelector("input").addEventListener("change", (e) => {
+            if (e.target.checked) selectCategory(cat); else deselectCategory(cat);
+          });
+          const delBtn = wrapper.querySelector(".icon-btn");
+          if (delBtn) {
+            delBtn.addEventListener("click", () => {
+              if (confirm(`項目「${cat}」を削除しますか？（入力済みデータも削除されます）`)) {
+                deleteCategory(cat);
+              }
+            });
+          }
+          multiList.appendChild(wrapper);
+        });
+
+        singleCol.appendChild(singleList);
+        multiCol.appendChild(multiList);
+        categorySelectArea.appendChild(singleCol);
+        categorySelectArea.appendChild(multiCol);
+
+        renderSharedStationsManager();
+      }
+
+      function selectCategory(cat) {
+        const m = dataMap[cat]?.mode || "single";
+        if (m === "single") ensureSingle(cat); else ensureMulti(cat);
+        // 選択時、日付が未設定で表紙調査日があるなら初期反映
+        if (m === "single" && !dataMap[cat].date && projectDateEl.value) dataMap[cat].date = projectDateEl.value;
+        selectedCategories.add(cat);
+        renderCategories();
+      }
+      function deselectCategory(cat) {
+        selectedCategories.delete(cat);
+        renderCategories();
+        renderCategorySelector();
+      }
+      function deleteCategory(cat) {
+        selectedCategories.delete(cat);
+        delete dataMap[cat];
+        renderCategories();
+        renderCategorySelector();
+      }
+
+      // 項目追加
+      addSingleCategoryBtn.addEventListener("click", () => {
+        const name = (newSingleCategoryInput.value || "").trim();
+        if (!name) return;
+        if (!dataMap[name]) dataMap[name] = { mode: "single", date: projectDateEl.value || "", location: "", details: "", photos: [] };
+        selectedCategories.add(name);
+        newSingleCategoryInput.value = "";
+        renderCategorySelector(); renderCategories();
+      });
+      addMultiCategoryBtn.addEventListener("click", () => {
+        const name = (newMultiCategoryInput.value || "").trim();
+        if (!name) return;
+        if (!dataMap[name]) dataMap[name] = { mode: "multi", stationData: {} };
+        ensureMulti(name);
+        selectedCategories.add(name);
+        newMultiCategoryInput.value = "";
+        renderCategorySelector(); renderCategories();
+      });
+
+      // Enterで追加
+      function bindEnterToButton(inputEl, buttonEl) {
+        if (!inputEl || !buttonEl) return;
+        inputEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); buttonEl.click(); }
+        });
+      }
+      bindEnterToButton(newSingleCategoryInput, addSingleCategoryBtn);
+      bindEnterToButton(newMultiCategoryInput, addMultiCategoryBtn);
+      bindEnterToButton(newStationInput, addStationBtn);
+
+      // 共有基地局マネージャ
+      function renderSharedStationsManager() {
+        stationListEl.innerHTML = "";
+        if (!sharedStations.length) {
+          const empty = document.createElement("div");
+          empty.className = "muted";
+          empty.textContent = "基地局は未登録です。名前を入力して「基地局を追加」を押してください。";
+          stationListEl.appendChild(empty);
+          return;
+        }
+        sharedStations.forEach(st => {
+          const chip = document.createElement("div");
+          chip.className = "station-chip";
+          chip.innerHTML = `
+            <span class="name">${escapeHtml(st.name)}</span>
+            <button class="remove" title="削除">×</button>
+          `;
+          chip.querySelector(".remove").addEventListener("click", () => {
+            if (confirm(`基地局「${st.name}」を削除します。全ての基地局項目からも削除されます。よろしいですか？`)) {
+              removeSharedStation(st.id);
+            }
+          });
+          stationListEl.appendChild(chip);
+        });
+      }
+      function addSharedStation(name) {
+        const nm = (name || "").trim();
+        if (!nm) return;
+        const id = stationIdFromName(nm);
+        if (sharedStations.some(s => s.id === id)) {
+          alert("同名の基地局が既に存在します");
+          return;
+        }
+        sharedStations.push({ id, name: nm });
+        Object.keys(dataMap).forEach(cat => {
+          if ((dataMap[cat]?.mode) === "multi") {
+            const sd = getOrInitStationData(cat, id);
+            if (!sd.date && projectDateEl.value) sd.date = projectDateEl.value;
+          }
+        });
+        renderCategorySelector(); renderCategories();
+      }
+      function removeSharedStation(stationId) {
+        const idx = sharedStations.findIndex(s => s.id === stationId);
+        if (idx >= 0) sharedStations.splice(idx, 1);
+        Object.keys(dataMap).forEach(cat => {
+          if ((dataMap[cat]?.mode) === "multi") {
+            if (dataMap[cat].stationData && dataMap[cat].stationData[stationId]) {
+              delete dataMap[cat].stationData[stationId];
+            }
+          }
+        });
+        renderCategorySelector(); renderCategories();
+      }
+      addStationBtn.addEventListener("click", () => {
+        const nm = newStationInput.value.trim();
+        if (!nm) return;
+        addSharedStation(nm);
+        newStationInput.value = "";
+      });
+
+      // 指令センター項目の入力ブロック
+      function buildSingleCategoryBlock(cat) {
+        ensureSingle(cat);
+        const idBase = hashId(cat);
         const v = dataMap[cat];
 
+        const block = document.createElement("div");
+        block.className = "card";
         block.innerHTML = `
-          <h3>${escapeHtml(cat)}</h3>
+          <h3>${escapeHtml(cat)} <span class="badge">単一</span></h3>
           <div class="form-row">
             <label for="date_${idBase}">調査日</label>
-            <input id="date_${idBase}" type="date" value="${v.date || ''}" />
+            <input id="date_${idBase}" type="date" value="${v.date || ""}" />
           </div>
           <div class="form-row">
-            <label for="loc_${idBase}">場所</label>
-            <input id="loc_${idBase}" type="text" placeholder="設置する箇所をなるべく詳細に記載" value="${v.location || ''}" />
+            <label for="loc_${idBase}">設置場所</label>
+            <input id="loc_${idBase}" type="text" placeholder="設置する箇所をなるべく詳細に記載" value="${v.location || ""}" />
           </div>
           <div class="form-row">
             <label for="det_${idBase}">調査内容</label>
-            <textarea id="det_${idBase}" placeholder="現地での観察事項、寸法、注意点など">${v.details || ''}</textarea>
+            <textarea id="det_${idBase}" placeholder="現地での調査事項、寸法、注意点など">${v.details || ""}</textarea>
           </div>
 
           <div class="form-row">
@@ -292,309 +666,467 @@
           </div>
         `;
 
-        // 値の同期
-        block.querySelector('#date_' + idBase).addEventListener('change', (e) => v.date = e.target.value);
-        block.querySelector('#loc_' + idBase).addEventListener('input', (e) => v.location = e.target.value);
-        block.querySelector('#det_' + idBase).addEventListener('input', (e) => v.details = e.target.value);
+        block.querySelector("#date_" + idBase).addEventListener("change", (e) => (v.date = e.target.value));
+        block.querySelector("#loc_" + idBase).addEventListener("input", (e) => (v.location = e.target.value));
+        block.querySelector("#det_" + idBase).addEventListener("input", (e) => (v.details = e.target.value));
 
-        // 画像ボタンと入力
-        const camInput = block.querySelector('#cam_' + idBase);
-        const fileInput = block.querySelector('#file_' + idBase);
-        block.querySelector('#camBtn_' + idBase).addEventListener('click', () => camInput.click());
-        block.querySelector('#fileBtn_' + idBase).addEventListener('click', () => fileInput.click());
+        const camInput = block.querySelector("#cam_" + idBase);
+        const fileInput = block.querySelector("#file_" + idBase);
+        block.querySelector("#camBtn_" + idBase).addEventListener("click", () => camInput.click());
+        block.querySelector("#fileBtn_" + idBase).addEventListener("click", () => fileInput.click());
 
-        camInput.addEventListener('change', (e) => handleFilesForCategory(cat, e.target.files));
-        fileInput.addEventListener('change', (e) => handleFilesForCategory(cat, e.target.files));
+        camInput.addEventListener("change", (e) => handleFilesForSingle(cat, e.target.files));
+        fileInput.addEventListener("change", (e) => handleFilesForSingle(cat, e.target.files));
 
-        // 写真一覧描画
-        renderPhotoList(cat, block.querySelector('#list_' + idBase));
-
+        renderPhotoList(v.photos, block.querySelector("#list_" + idBase));
         return block;
       }
-
-      // 指定カテゴリにファイル追加
-      async function handleFilesForCategory(cat, fileList) {
-        const v = dataMap[cat] || (dataMap[cat] = { date:'', location:'', details:'', photos:[] });
-        for (const file of fileList) {
-          if (!file.type.startsWith('image/')) continue;
-          const dataUrl = await readFileAsDataURL(file);
-          const resized = await resizeImage(dataUrl, 1280);
-          v.photos.push({ dataUrl: resized, name: file.name, caption: '' });
-        }
-        const idBase = hashId(cat);
-        const listEl = document.getElementById('list_' + idBase);
-        if (listEl) renderPhotoList(cat, listEl);
+      function handleFilesForSingle(cat, fileList) {
+        const v = ensureSingle(cat);
+        (async () => {
+          for (const file of fileList) {
+            if (!file.type.startsWith("image/")) continue;
+            const dataUrl = await readFileAsDataURL(file);
+            const resized = await resizeImage(dataUrl, 1280);
+            v.photos.push({ dataUrl: resized, name: file.name, caption: "" });
+          }
+          const idBase = hashId(cat);
+          const listEl = document.getElementById("list_" + idBase);
+          if (listEl) renderPhotoList(v.photos, listEl);
+        })();
       }
 
-      // 写真一覧（キャプション付き）
-      function renderPhotoList(cat, listEl) {
-        const v = dataMap[cat];
-        listEl.innerHTML = '';
-        v.photos.forEach((p, idx) => {
-          const item = document.createElement('div');
-          item.className = 'photo-item';
+      // 基地局項目の描画
+      function buildStationBlock(st, multiCats) {
+        const wrap = document.createElement("div");
+        wrap.className = "station-block";
+        wrap.innerHTML = `
+          <div class="station-header">
+            <div class="station-title">${escapeHtml(st.name)}</div>
+          </div>
+        `;
+        if (!multiCats.length) {
+          const p = document.createElement("p");
+          p.className = "muted";
+          p.textContent = "基地局項目が未選択です。上の項目選択から基地局項目を選んでください。";
+          wrap.appendChild(p);
+          return wrap;
+        }
+
+        multiCats.forEach(cat => {
+          ensureMulti(cat);
+          const stData = getOrInitStationData(cat, st.id);
+          const idBase = hashId(cat + "|" + st.id);
+          const tmpl = multiCategoryDefaults[cat] || {};
+
+          const seg = document.createElement("div");
+          seg.className = "card";
+          seg.style.margin = "8px 0";
+          seg.innerHTML = `
+            <div class="subsection-title">${escapeHtml(cat)} <span class="badge">複数</span></div>
+            <div class="form-row">
+              <label for="date_${idBase}">調査日</label>
+              <input id="date_${idBase}" type="date" value="${stData.date || ""}" />
+            </div>
+            <div class="form-row">
+              <label for="loc_${idBase}">設置場所</label>
+              <input
+                id="loc_${idBase}"
+                type="text"
+                placeholder="${escapeHtml(tmpl.location || "設置する箇所をなるべく詳細に記載")}"
+                value="${stData.location || ""}"
+              />
+            </div>
+            <div class="form-row">
+              <label for="det_${idBase}">調査内容</label>
+              <textarea
+                id="det_${idBase}"
+                placeholder="${escapeHtml(tmpl.details || "現地での調査事項、寸法、注意点など")}"
+              >${stData.details || ""}</textarea>
+            </div>
+            
+            <div class="form-row">
+              <label>写真</label>
+              <div>
+                <div class="buttons">
+                  <input id="cam_${idBase}" type="file" accept="image/*" capture="environment" multiple style="display:none" />
+                  <button id="camBtn_${idBase}" class="btn primary">撮影する（カメラ）</button>
+            
+                  <input id="file_${idBase}" type="file" accept="image/*" multiple style="display:none" />
+                  <button id="fileBtn_${idBase}" class="btn">画像を選択</button>
+                </div>
+                <div class="photos">
+                  <div id="list_${idBase}" class="photo-list"></div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          seg.querySelector("#date_" + idBase).addEventListener("change", (e) => (stData.date = e.target.value));
+          seg.querySelector("#loc_" + idBase).addEventListener("input", (e) => (stData.location = e.target.value));
+          seg.querySelector("#det_" + idBase).addEventListener("input", (e) => (stData.details = e.target.value));
+
+          const camInput = seg.querySelector("#cam_" + idBase);
+          const fileInput = seg.querySelector("#file_" + idBase);
+          seg.querySelector("#camBtn_" + idBase).addEventListener("click", () => camInput.click());
+          seg.querySelector("#fileBtn_" + idBase).addEventListener("click", () => fileInput.click());
+          camInput.addEventListener("change", (e) => handleFilesForStationCategory(cat, st.id, e.target.files, seg));
+          fileInput.addEventListener("change", (e) => handleFilesForStationCategory(cat, st.id, e.target.files, seg));
+
+          renderPhotoList(stData.photos, seg.querySelector("#list_" + idBase));
+          wrap.appendChild(seg);
+        });
+
+        return wrap;
+      }
+      function handleFilesForStationCategory(cat, stationId, fileList, segEl) {
+        const stData = getOrInitStationData(cat, stationId);
+        (async () => {
+          for (const file of fileList) {
+            if (!file.type.startsWith("image/")) continue;
+            const dataUrl = await readFileAsDataURL(file);
+            const resized = await resizeImage(dataUrl, 1280);
+            stData.photos.push({ dataUrl: resized, name: file.name, caption: "" });
+          }
+          const idBase = hashId(cat + "|" + stationId);
+          const listEl = segEl.querySelector("#list_" + idBase);
+          if (listEl) renderPhotoList(stData.photos, listEl);
+        })();
+      }
+
+      // 写真リスト
+      function renderPhotoList(photoArr, listEl) {
+        listEl.innerHTML = "";
+        photoArr.forEach((p, idx) => {
+          const item = document.createElement("div");
+          item.className = "photo-item";
           item.innerHTML = `
-            <img src="${p.dataUrl}" alt="photo ${idx+1}">
+            <img src="${p.dataUrl}" alt="photo ${idx + 1}">
             <div class="caption">
-              <input type="text" placeholder="説明（キャプション）" value="${p.caption || ''}" />
+              <input type="text" placeholder="説明（キャプション）" value="${p.caption || ""}" />
             </div>
             <div class="footer">
-              <span>${p.name || `photo_${idx+1}.jpg`}</span>
+              <span>${p.name || `photo_${idx + 1}.jpg`}</span>
               <button class="remove">削除</button>
             </div>
           `;
-          item.querySelector('input').addEventListener('input', (e)=> { p.caption = e.target.value || ''; });
-          item.querySelector('.remove').addEventListener('click', ()=> {
-            v.photos.splice(idx, 1);
-            renderPhotoList(cat, listEl);
+          item.querySelector("input").addEventListener("input", (e) => { p.caption = e.target.value || ""; });
+          item.querySelector(".remove").addEventListener("click", () => {
+            photoArr.splice(idx, 1);
+            renderPhotoList(photoArr, listEl);
           });
           listEl.appendChild(item);
         });
       }
 
-      // 画像読み込み/リサイズユーティリティ
-      function readFileAsDataURL(file) {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      }
-      function resizeImage(dataUrl, maxWidth) {
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            const scale = Math.min(1, maxWidth / img.width);
-            const w = Math.round(img.width * scale);
-            const h = Math.round(img.height * scale);
-            const canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,w,h);
-            ctx.drawImage(img, 0, 0, w, h);
-            const out = canvas.toDataURL('image/jpeg', 0.85);
-            resolve(out);
-          };
-          img.src = dataUrl;
-        });
-      }
-
-      // 下書き保存・読み込み
-      saveBtn.addEventListener('click', () => {
+      // 下書き保存・読み込み（V4形式）
+      saveBtn.addEventListener("click", () => {
         const payload = {
-          projectTitle: projectTitleEl.value || '',
-          projectDate: projectDateEl.value || '',
+          projectTitle: projectTitleEl.value || "",
+          projectDate: projectDateEl.value || "",
           selected: [...selectedCategories],
-          data: dataMap
+          data: dataMap,
+          sharedStations,
         };
-        localStorage.setItem('surveyDraftV2', JSON.stringify(payload));
-        alert('下書きを保存しました');
+        localStorage.setItem("surveyDraftV4", JSON.stringify(payload));
+        alert("下書きを保存しました");
       });
-      loadBtn.addEventListener('click', () => {
-        const raw = localStorage.getItem('surveyDraftV2');
-        if (!raw) { alert('保存された下書きがありません'); return; }
+      loadBtn.addEventListener("click", () => {
+        const raw = localStorage.getItem("surveyDraftV4")
+          || localStorage.getItem("surveyDraftV3")
+          || localStorage.getItem("surveyDraftV2");
+        if (!raw) { alert("保存された下書きがありません"); return; }
         try {
           const payload = JSON.parse(raw);
-          projectTitleEl.value = payload.projectTitle || '';
-          projectDateEl.value = payload.projectDate || '';
-          projectDatePrev = payload.projectDate || '';
+          projectTitleEl.value = payload.projectTitle || "";
+          projectDateEl.value  = payload.projectDate || "";
+          projectDatePrev      = payload.projectDate || "";
 
-          Object.keys(dataMap).forEach(k => delete dataMap[k]);
+          Object.keys(dataMap).forEach((k) => delete dataMap[k]);
           Object.assign(dataMap, payload.data || {});
+          if (payload.sharedStations && Array.isArray(payload.sharedStations)) {
+            sharedStations = payload.sharedStations.slice();
+          } else {
+            migrateSharedStationsFromLegacy();
+          }
           selectedCategories.clear();
-          (payload.selected || []).forEach(c => selectedCategories.add(c));
-          renderCategorySelector();
-          renderCategories();
-          alert('下書きを読み込みました');
+          (payload.selected || []).forEach((c) => selectedCategories.add(c));
+          renderCategorySelector(); renderCategories();
+          alert("下書きを読み込みました");
         } catch {
-          alert('読み込みに失敗しました');
+          alert("読み込みに失敗しました");
         }
+      });
+
+      // レガシー（V3: cat.stations[]）から共有基地局へ移行
+      function migrateSharedStationsFromLegacy() {
+        const nameSet = new Map();
+        Object.keys(dataMap).forEach(cat => {
+          const v = dataMap[cat];
+          if (v && v.mode === "multi" && Array.isArray(v.stations)) {
+            v.stations.forEach(st => {
+              const nm = (st.name || "基地局").trim();
+              const key = nm.toLowerCase();
+              if (!nameSet.has(key)) nameSet.set(key, nm);
+            });
+          }
+        });
+        sharedStations = Array.from(nameSet.values()).sort((a,b)=>a.localeCompare(b,"ja")).map(nm => ({
+          id: stationIdFromName(nm), name: nm
+        }));
+        Object.keys(dataMap).forEach(cat => {
+          const v = dataMap[cat];
+          if (v && v.mode === "multi") {
+            const stationData = {};
+            if (Array.isArray(v.stations)) {
+              v.stations.forEach(st => {
+                const nm = (st.name || "基地局").trim();
+                const id = stationIdFromName(nm);
+                stationData[id] = {
+                  date: st.date || "",
+                  location: st.location || "",
+                  details: st.details || "",
+                  photos: Array.isArray(st.photos) ? st.photos : [],
+                };
+              });
+            }
+            sharedStations.forEach(ss => {
+              if (!stationData[ss.id]) {
+                const tmpl = multiCategoryDefaults[cat] || {};
+                stationData[ss.id] = { date: projectDateEl.value || "", location: tmpl.location || "", details: tmpl.details || "", photos: [] };
+              }
+            });
+            v.stationData = stationData;
+            delete v.stations;
+          }
+        });
+      }
+
+      // 初期化：既定項目を用意
+      defaultSingleCategories.forEach((c) => {
+        if (!dataMap[c]) dataMap[c] = { mode: "single", date: "", location: "", details: "", photos: [] };
+      });
+      defaultMultiCategories.forEach((c) => {
+        if (!dataMap[c]) dataMap[c] = { mode: "multi", stationData: {} };
       });
 
       // 初期描画
-      defaultCategories.forEach(c => { dataMap[c] = dataMap[c] || { date:'', location:'', details:'', photos:[] }; });
       renderCategorySelector();
+      renderCategories();
 
-      // Excel出力（体裁調整）
-      exportExcelBtn.addEventListener('click', async () => {
-        const title = (projectTitleEl.value || '').trim() || '-';
+      // 画面描画（単一／基地局単位）
+      function renderCategories() {
+        // 指令センター項目
+        singleCatsContainer.innerHTML = "";
+        const selectedSingles = [...selectedCategories].filter(c => (dataMap[c]?.mode || "single") === "single").sort((a,b)=>a.localeCompare(b,"ja"));
+        selectedSingles.forEach(cat => singleCatsContainer.appendChild(buildSingleCategoryBlock(cat)));
+
+        // 基地局項目
+        multiStationsContainer.innerHTML = "";
+        const selectedMultis = [...selectedCategories].filter(c => (dataMap[c]?.mode) === "multi").sort((a,b)=>a.localeCompare(b,"ja"));
+        if (!selectedMultis.length) {
+          const p = document.createElement("p"); p.className = "muted";
+          p.textContent = "基地局項目が未選択です。項目選択で基地局項目を選んでください。";
+          multiStationsContainer.appendChild(p);
+        } else if (!sharedStations.length) {
+          const p2 = document.createElement("p"); p2.className = "muted";
+          p2.textContent = "基地局が未登録です。項目選択で基地局を追加してください。";
+          multiStationsContainer.appendChild(p2);
+        } else {
+          sharedStations.forEach(st => {
+            selectedMultis.forEach(cat => ensureMulti(cat));
+            multiStationsContainer.appendChild(buildStationBlock(st, selectedMultis));
+          });
+        }
+      }
+
+      // Excel出力
+      exportExcelBtn.addEventListener("click", async () => {
+        const title = (projectTitleEl.value || "").trim() || "-";
         const cats = [...selectedCategories];
+        if (cats.length === 0) {
+          if (!confirm("項目が未選択です。表紙と空の目次のみを出力しますか？")) return;
+        }
 
         const ExcelJSRef = window.ExcelJS;
         const wb = new ExcelJSRef.Workbook();
-        wb.creator = '現地調査レポートツール';
+        wb.creator = "現地調査レポートツール";
         wb.created = new Date();
-        wb.properties.title = '現地調査報告書';
+        wb.properties.title = "現地調査報告書";
 
-        const labelStyle = { font: { bold: true, name: 'Meiryo' } };
-        const sectionTitleStyle = { font: { size: 14, bold: true, name: 'Meiryo' } };
-        const borderThin = { style: 'thin', color: { argb: 'FF999999' } };
+        const titleStyle = { font: { size: 18, bold: true }, alignment: { horizontal: "center", vertical: "middle" } };
+        const headerStyle = { font: { bold: true }, alignment: { vertical: "middle" } };
+
+        const projectDateStr = projectDateEl.value || "";
+        const exportDateStr  = formatDate(new Date());
 
         // 表紙
-        const wsCover = wb.addWorksheet('表紙', {
-          pageSetup: { paperSize: 9, orientation: 'portrait',
-            margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 } },
-          headerFooter: { oddFooter: '&Rページ &P / &N' }
-        });
-        for (let i=1;i<=8;i++) wsCover.getColumn(i).width = 16;
-        wsCover.mergeCells('A3:H6');
-        wsCover.getCell('A3').value = '現地調査報告書';
-        wsCover.getCell('A3').style = { font: { size: 20, bold: true, name: 'Meiryo' }, alignment: { horizontal: 'center', vertical: 'middle' } };
-
-        wsCover.getCell('A8').value = '案件名';
-        wsCover.getCell('A8').style = labelStyle;
-        wsCover.mergeCells('B8:H8');
-        wsCover.getCell('B8').value = title;
-
-        wsCover.getCell('A10').value = '調査日';
-        wsCover.getCell('A10').style = labelStyle;
-        wsCover.mergeCells('B10:H10');
-        const exportDateStr = formatDate(new Date());
-        const projectDateStr = projectDateEl.value || '';
-        wsCover.getCell('B10').value = projectDateStr || exportDateStr;
-        wsCover.getCell('B10').numFmt = 'yyyy-mm-dd';
+        const wsCover = wb.addWorksheet("表紙");
+        wsCover.properties.defaultRowHeight = 18;
+        for (let i = 1; i <= 8; i++) wsCover.getColumn(i).width = 16;
+        wsCover.mergeCells("A3:H6");
+        wsCover.getCell("A3").value = "現地調査報告書";
+        Object.assign(wsCover.getCell("A3"), { style: titleStyle });
+        wsCover.getCell("A8").value = "案件名";
+        wsCover.getCell("A8").style = headerStyle;
+        wsCover.mergeCells("B8:H8");
+        wsCover.getCell("B8").value = title;
+        wsCover.getCell("A10").value = "日付";
+        wsCover.getCell("A10").style = headerStyle;
+        wsCover.mergeCells("B10:H10");
+        wsCover.getCell("B10").value = projectDateStr || exportDateStr;
 
         // 目次
-        const wsToc = wb.addWorksheet('目次', {
-          pageSetup: { paperSize: 9, orientation: 'portrait' },
-          headerFooter: { oddFooter: '&Rページ &P / &N' }
-        });
+        const wsToc = wb.addWorksheet("目次");
         wsToc.getColumn(1).width = 40;
         wsToc.getColumn(2).width = 18;
-        wsToc.getCell('A1').value = '目次';
-        wsToc.getCell('A1').style = sectionTitleStyle;
+        wsToc.getCell("A1").value = "目次";
+        wsToc.getCell("A1").font = { size: 14, bold: true };
 
         const sheetNameMap = {};
         const usedNames = new Set();
-        cats.forEach(cat => {
+        let tocRow = 3;
+
+        const selectedSingles = cats.filter(c => (dataMap[c]?.mode || "single") === "single");
+        const selectedMultis = cats.filter(c => (dataMap[c]?.mode) === "multi");
+
+        // シート名（単一）
+        selectedSingles.forEach((cat) => {
           const name = makeUniqueSheetName(sanitizeSheetName(cat), usedNames);
           sheetNameMap[cat] = name; usedNames.add(name);
         });
+        // シート名（複数：基地局×項目）
+        sharedStations.forEach((st) => {
+          selectedMultis.forEach((cat) => {
+            const label = `${st.name} - ${cat}`;
+            const sname = makeUniqueSheetName(sanitizeSheetName(label), usedNames);
+            sheetNameMap[`${cat}|${st.id}`] = sname; usedNames.add(sname);
+          });
+        });
 
-        let tocRow = 3;
-        cats.forEach(cat => {
+        // 目次（単一）
+        selectedSingles.forEach((cat) => {
+          const v = dataMap[cat] || {};
           wsToc.getCell(`A${tocRow}`).value = { text: cat, hyperlink: `#'${sheetNameMap[cat]}'!A1` };
-          wsToc.getCell(`A${tocRow}`).font = { color: { argb: 'FF1F4E79' }, underline: true, name: 'Meiryo' };
-          const photoCount = (dataMap[cat]?.photos || []).length;
+          wsToc.getCell(`A${tocRow}`).font = { color: { argb: "FF1F4E79" }, underline: true };
+          const photoCount = (v.photos || []).length;
           wsToc.getCell(`B${tocRow}`).value = `写真 ${photoCount}枚`;
           tocRow++;
         });
-
-        // 各カテゴリ
-        for (const cat of cats) {
-          const v = dataMap[cat] || { date:'', location:'', details:'', photos:[] };
-          const ws = wb.addWorksheet(sheetNameMap[cat], {
-            pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
-              margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
-            headerFooter: { oddFooter: '&Rページ &P / &N' }
+        // 目次（複数）
+        sharedStations.forEach((st) => {
+          selectedMultis.forEach((cat) => {
+            const v = dataMap[cat] || {};
+            const stData = (v.stationData || {})[st.id] || {};
+            const key = `${cat}|${st.id}`;
+            const display = `${st.name} - ${cat}`;
+            wsToc.getCell(`A${tocRow}`).value = { text: display, hyperlink: `#'${sheetNameMap[key]}'!A1` };
+            wsToc.getCell(`A${tocRow}`).font = { color: { argb: "FF1F4E79" }, underline: true };
+            const photoCount = (stData.photos || []).length;
+            wsToc.getCell(`B${tocRow}`).value = `写真 ${photoCount}枚`;
+            tocRow++;
           });
+        });
 
-          const colWidths = [4, 14, 14, 18, 14, 14, 18, 14, 14, 18]; // A〜J
-          colWidths.forEach((w, i) => ws.getColumn(i+1).width = w);
-
-          ws.getCell('A1').value = cat;
-          ws.getCell('A1').style = sectionTitleStyle;
-
-          ws.getCell('A3').value = '調査日'; ws.getCell('A3').style = labelStyle;
-          ws.mergeCells('B3:J3'); ws.getCell('B3').value = v.date || (projectDateStr || '-'); ws.getCell('B3').numFmt = 'yyyy-mm-dd';
-
-          ws.getCell('A4').value = '場所'; ws.getCell('A4').style = labelStyle;
-          ws.mergeCells('B4:J4'); ws.getCell('B4').value = v.location || '-';
-
-          ws.getCell('A5').value = '調査内容'; ws.getCell('A5').style = labelStyle;
-          ws.mergeCells('B5:J6');
-          ws.getCell('B5').value = (v.details || '').replace(/\r?\n/g, '\n');
-          ws.getCell('B5').alignment = { wrapText: true, vertical: 'top' };
-          ws.getCell('A3').border = { bottom: borderThin };
-          ws.getCell('A4').border = { bottom: borderThin };
-          ws.getCell('A5').border = { bottom: borderThin };
-          ws.getCell('B3').border = { bottom: borderThin };
-          ws.getCell('B4').border = { bottom: borderThin };
-          ws.getCell('B5').border = { bottom: borderThin };
-
-          let startRow = 8;
-          const photos = v.photos || [];
-          const perRow = 3;
-          const blockRows = 12;
-          const groups = [
-            { img: ['B','C'], desc: 'D' },
-            { img: ['E','F'], desc: 'G' },
-            { img: ['H','I'], desc: 'J' }
-          ];
-
-          for (let i = 0; i < photos.length; i += perRow) {
-            for (let r = startRow; r < startRow + blockRows; r++) ws.getRow(r).height = 18;
-
-            for (let j = 0; j < perRow; j++) {
-              const p = photos[i + j];
-              if (!p) break;
-              const cfg = groups[j];
-
-              const imgRange = `${cfg.img[0]}${startRow}:${cfg.img[1]}${startRow + blockRows - 1}`;
-              const descRange = `${cfg.desc}${startRow}:${cfg.desc}${startRow + blockRows - 1}`;
-
-              ws.mergeCells(imgRange);
-              ws.mergeCells(descRange);
-
-              const descCell = ws.getCell(`${cfg.desc}${startRow}`);
-              descCell.value = p.caption || '';
-              descCell.alignment = { wrapText: true, vertical: 'top' };
-              descCell.border = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
-
-              const ext = p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg';
-              const base64 = p.dataUrl.split(',')[1];
-              const imageId = wb.addImage({ base64, extension: ext });
-              ws.addImage(imageId, imgRange);
-
-              const corners = [
-                ws.getCell(`${cfg.img[0]}${startRow}`),
-                ws.getCell(`${cfg.img[1]}${startRow}`),
-                ws.getCell(`${cfg.img[0]}${startRow + blockRows - 1}`),
-                ws.getCell(`${cfg.img[1]}${startRow + blockRows - 1}`)
-              ];
-              corners.forEach(c => c.border = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin });
-            }
-
-            startRow += (blockRows + 1);
-          }
+        // シート（単一）
+        for (const cat of selectedSingles) {
+          const v = dataMap[cat] || {};
+          const ws = wb.addWorksheet(sheetNameMap[cat]);
+          writeCategorySheet(ws, headerStyle, cat, (v.date || projectDateStr || ""), v.location || "", v.details || "", v.photos || []);
         }
+        // シート（複数：基地局×項目）
+        sharedStations.forEach((st) => {
+          selectedMultis.forEach((cat) => {
+            const v = dataMap[cat] || {};
+            const stData = (v.stationData || {})[st.id] || { date: "", location: "", details: "", photos: [] };
+            const key = `${cat}|${st.id}`;
+            const titleText = `${st.name}（${cat}）`;
+            const ws = wb.addWorksheet(sheetNameMap[key]);
+            writeCategorySheet(ws, headerStyle, titleText, (stData.date || projectDateStr || ""), stData.location || "", stData.details || "", stData.photos || []);
+          });
+        });
 
+        // 出力
         const buf = await wb.xlsx.writeBuffer();
-        const fileName = `${title || 'report'}.xlsx`;
-        saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
+        const fileName = `${title || "report"}.xlsx`;
+        saveAs(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), fileName);
       });
 
-      // ユーティリティ
-      function sanitizeSheetName(name) {
-        const invalid = /[\\\/\?\*\[\]\:]/g;
-        let n = (name || '').replace(invalid, ' ').trim();
-        if (!n) n = 'シート';
-        if (n.length > 31) n = n.slice(0, 31);
-        return n;
-      }
-      function makeUniqueSheetName(base, used) {
-        let n = base; let i = 2;
-        while (used.has(n)) {
-          const suffix = ` (${i})`;
-          const core = base.slice(0, 31 - suffix.length);
-          n = core + suffix; i++;
+      function writeCategorySheet(ws, headerStyle, title, date, location, details, photos) {
+        const colWidths = [4, 14, 14, 18, 14, 14, 18, 14, 14, 18]; // A〜J
+        colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+        ws.getCell("A1").value = title;
+        ws.getCell("A1").font = { size: 14, bold: true };
+
+        ws.getCell("A3").value = "調査日";
+        ws.getCell("A3").style = headerStyle;
+        ws.mergeCells("B3:J3");
+        ws.getCell("B3").value = date || "-";
+
+        ws.getCell("A4").value = "設置場所";
+        ws.getCell("A4").style = headerStyle;
+        ws.mergeCells("B4:J4");
+        ws.getCell("B4").value = location || "-";
+
+        ws.getCell("A5").value = "調査内容";
+        ws.getCell("A5").style = headerStyle;
+        ws.mergeCells("B5:J6");
+        ws.getCell("B5").value = (details || "").replace(/\r?\n/g, "\n");
+        ws.getCell("B5").alignment = { wrapText: true, vertical: "top" };
+
+        let startRow = 8;
+        const perRow = 3;
+        const blockRows = 12;
+        const descAlign = { wrapText: true, vertical: "top" };
+
+        for (let i = 0; i < photos.length; i += perRow) {
+          for (let r = startRow; r < startRow + blockRows; r++) ws.getRow(r).height = 18;
+
+          const groupCols = [
+            { img: ["B", "C"], desc: "D" },
+            { img: ["E", "F"], desc: "G" },
+            { img: ["H", "I"], desc: "J" },
+          ];
+          for (let j = 0; j < perRow; j++) {
+            const p = photos[i + j];
+            if (!p) break;
+            const cfg = groupCols[j];
+
+            const imgRange = `${cfg.img[0]}${startRow}:${cfg.img[1]}${startRow + blockRows - 1}`;
+            ws.mergeCells(imgRange);
+
+            const descRange = `${cfg.desc}${startRow}:${cfg.desc}${startRow + blockRows - 1}`;
+            ws.mergeCells(descRange);
+            const descCell = ws.getCell(`${cfg.desc}${startRow}`);
+            descCell.value = p.caption || "";
+            descCell.alignment = descAlign;
+
+            const ext = p.dataUrl?.startsWith("data:image/png") ? "png" : "jpeg";
+            const base64 = (p.dataUrl || "").split(",")[1] || "";
+            if (base64) {
+              const imageId = ws.workbook.addImage({ base64, extension: ext });
+              ws.addImage(imageId, imgRange);
+            }
+          }
+          startRow += blockRows + 1;
         }
-        return n;
       }
-      function formatDate(d) {
-        const y = d.getFullYear();
-        const m = String(d.getMonth()+1).padStart(2,'0');
-        const day = String(d.getDate()).padStart(2,'0');
-        return `${y}-${m}-${day}`;
-      }
-      function hashId(str) {
-        let h = 0;
-        for (let i = 0; i < str.length; i++) h = (h << 5) - h + str.charCodeAt(i) | 0;
-        return Math.abs(h).toString(36);
-      }
-      function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+      // 初回描画
+      renderCategorySelector();
+
+      // Service Worker登録
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./service-worker.js')
+            .then(reg => {
+              console.log('Service Worker registered:', reg.scope);
+            })
+            .catch(err => {
+              console.error('Service Worker registration failed:', err);
+            });
+        });
       }
     </script>
   </body>
