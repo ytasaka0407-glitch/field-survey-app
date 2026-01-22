@@ -314,6 +314,12 @@
         const day = String(d.getDate()).padStart(2, "0");
         return `${y}-${m}-${day}`;
       }
+      function fromInputDate(str) {
+        // "YYYY-MM-DD" を安全に Date に変換（タイムゾーンずれ防止）
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str || '');
+        if (!m) return null;
+        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      }
       function hashId(str) {
         let h = 0;
         for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
@@ -951,23 +957,24 @@
         wb.created = new Date();
         wb.properties.title = '現地調査報告書';
 
-        // 共通スタイル
-        const headerStyle = { font: { bold: true }, alignment: { vertical: 'middle' } };
-        const titleStyle = { font: { size: 20, bold: true, name: 'Meiryo' }, alignment: { horizontal: 'center', vertical: 'middle' } };
-        const sectionTitleStyle = { font: { size: 14, bold: true, name: 'Meiryo' } };
-        const labelStyle = { font: { bold: true, name: 'Meiryo' } };
-        const borderThin = { style: 'thin', color: { argb: 'FF999999' } };
+        // 共通スタイル（書体を Meiryo UI に統一）
+        const titleStyle        = { font: { size: 20, bold: true, name: 'Meiryo UI' }, alignment: { horizontal: 'center', vertical: 'middle' } };
+        const sectionTitleStyle = { font: { size: 14, bold: true, name: 'Meiryo UI' } };
+        const labelStyle        = { font: { bold: true, name: 'Meiryo UI' } };
+        const linkStyle         = { font: { color: { argb: 'FF1F4E79' }, underline: true, name: 'Meiryo UI' } };
+        const borderThin        = { style: 'thin', color: { argb: 'FF999999' } };
+
+        const projectDateStr = projectDateEl.value || '';
+        const exportDate     = new Date();
+        const coverDate      = fromInputDate(projectDateStr) || exportDate; // 表紙の日付
 
         // 表紙
         const wsCover = wb.addWorksheet('表紙', {
           pageSetup: {
-            paperSize: 9, // A4
-            orientation: 'portrait',
+            paperSize: 9, orientation: 'portrait',
             margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 }
           },
-          headerFooter: {
-            oddFooter: '&Rページ &P / &N'
-          }
+          headerFooter: { oddFooter: '&Rページ &P / &N' }
         });
         for (let i = 1; i <= 8; i++) wsCover.getColumn(i).width = 16;
         wsCover.mergeCells('A3:H6');
@@ -978,12 +985,14 @@
         wsCover.getCell('A8').style = labelStyle;
         wsCover.mergeCells('B8:H8');
         wsCover.getCell('B8').value = title;
+        wsCover.getCell('B8').font = { name: 'Meiryo UI' };
 
         wsCover.getCell('A10').value = '日付';
         wsCover.getCell('A10').style = labelStyle;
         wsCover.mergeCells('B10:H10');
-        wsCover.getCell('B10').value = formatDate(new Date());
-        wsCover.getCell('B10').numFmt = 'yyyy-mm-dd';
+        wsCover.getCell('B10').value = coverDate;          // Date型で設定
+        wsCover.getCell('B10').numFmt = 'yyyy/mm/dd';      // 表示形式
+        wsCover.getCell('B10').font = { name: 'Meiryo UI' };
 
         // 目次
         const wsToc = wb.addWorksheet('目次', {
@@ -1006,27 +1015,30 @@
         let tocRow = 3;
         cats.forEach(cat => {
           wsToc.getCell(`A${tocRow}`).value = { text: cat, hyperlink: `#'${sheetNameMap[cat]}'!A1` };
-          wsToc.getCell(`A${tocRow}`).font = { color: { argb: 'FF1F4E79' }, underline: true, name: 'Meiryo' };
-          const photoCount = (dataMap[cat]?.photos || []).length;
-          wsToc.getCell(`B${tocRow}`).value = `写真 ${photoCount}枚`;
+          wsToc.getCell(`A${tocRow}`).style = linkStyle;
+          wsToc.getCell(`B${tocRow}`).value = `写真 ${(dataMap[cat]?.photos || []).length}枚`;
+          wsToc.getCell(`B${tocRow}`).font  = { name: 'Meiryo UI' };
           tocRow++;
         });
 
         // カテゴリシート
         for (const cat of cats) {
-          const v = dataMap[cat] || { date:'', location:'', details:'', photos:[] };
+          const v  = dataMap[cat] || { date:'', location:'', details:'', photos:[] };
           const ws = wb.addWorksheet(sheetNameMap[cat], {
             pageSetup: {
               paperSize: 9, orientation: 'portrait',
-              fitToPage: true, fitToWidth: 1, fitToHeight: 0, // 横1ページに収める
+              fitToPage: true, fitToWidth: 1, fitToHeight: 0,
               margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 }
             },
             headerFooter: { oddFooter: '&Rページ &P / &N' }
           });
 
-          // 列幅（Aは余白）
-          const colWidths = [4, 14, 14, 18, 14, 14, 18, 14, 14, 18]; // A〜J
-          colWidths.forEach((w, i) => { ws.getColumn(i+1).width = w; });
+          // 画像枠線の見え方改善：グリッド線を非表示
+          ws.views = [{ showGridLines: false }];
+
+          // 列幅（A列を広げる：見切れ対策）
+          const colWidths = [10, 16, 16, 18, 16, 16, 18, 16, 16, 18]; // A〜J
+          colWidths.forEach((w, i) => ws.getColumn(i+1).width = w);
 
           // セクション見出し
           ws.getCell('A1').value = cat;
@@ -1034,16 +1046,27 @@
 
           // 基本情報
           ws.getCell('A3').value = '調査日'; ws.getCell('A3').style = labelStyle;
-          ws.mergeCells('B3:J3'); ws.getCell('B3').value = v.date || '-'; ws.getCell('B3').numFmt = 'yyyy-mm-dd';
+          ws.mergeCells('B3:J3');
+          const d = fromInputDate(v.date || projectDateStr);
+          if (d) {
+            ws.getCell('B3').value = d;                 // Date型
+            ws.getCell('B3').numFmt = 'yyyy/mm/dd';
+          } else {
+            ws.getCell('B3').value = '-';
+          }
+          ws.getCell('B3').font = { name: 'Meiryo UI' };
 
           ws.getCell('A4').value = '場所'; ws.getCell('A4').style = labelStyle;
           ws.mergeCells('B4:J4'); ws.getCell('B4').value = v.location || '-';
+          ws.getCell('B4').font = { name: 'Meiryo UI' };
 
           ws.getCell('A5').value = '調査内容'; ws.getCell('A5').style = labelStyle;
           ws.mergeCells('B5:J6');
           ws.getCell('B5').value = (v.details || '').replace(/\r?\n/g, '\n');
           ws.getCell('B5').alignment = { wrapText: true, vertical: 'top' };
-          // 枠線
+          ws.getCell('B5').font = { name: 'Meiryo UI' };
+
+          // 下罫線（見出し部のみ）
           ws.getCell('A3').border = { bottom: borderThin };
           ws.getCell('A4').border = { bottom: borderThin };
           ws.getCell('A5').border = { bottom: borderThin };
@@ -1051,7 +1074,7 @@
           ws.getCell('B4').border = { bottom: borderThin };
           ws.getCell('B5').border = { bottom: borderThin };
 
-          // 写真：横3枚 × 縦に並べる
+          // 写真：横3枚 × 縦に並べる（画像セルの枠線は付けない）
           let startRow = 8;
           const photos = v.photos || [];
           const perRow = 3;
@@ -1071,33 +1094,25 @@
               if (!p) break;
               const cfg = groups[j];
 
-              const imgRange = `${cfg.img[0]}${startRow}:${cfg.img[1]}${startRow + blockRows - 1}`;
+              const imgRange  = `${cfg.img[0]}${startRow}:${cfg.img[1]}${startRow + blockRows - 1}`;
               const descRange = `${cfg.desc}${startRow}:${cfg.desc}${startRow + blockRows - 1}`;
 
               // セル結合
               ws.mergeCells(imgRange);
               ws.mergeCells(descRange);
 
-              // 説明セルスタイル
+              // 説明セル（Meiryo UI、枠線あり）
               const descCell = ws.getCell(`${cfg.desc}${startRow}`);
-              descCell.value = p.caption || '';
+              descCell.value     = p.caption || '';
               descCell.alignment = { wrapText: true, vertical: 'top' };
-              descCell.border = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+              descCell.font      = { name: 'Meiryo UI' };
+              descCell.border    = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
 
-              // 画像貼付
-              const ext = p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg';
+              // 画像貼付（画像セルへの枠線は付けない）
+              const ext    = p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg';
               const base64 = p.dataUrl.split(',')[1];
               const imageId = wb.addImage({ base64, extension: ext });
               ws.addImage(imageId, imgRange);
-
-              // 画像枠線風に周囲へ細罫線（見栄え向上）
-              const corners = [
-                ws.getCell(`${cfg.img[0]}${startRow}`),
-                ws.getCell(`${cfg.img[1]}${startRow}`),
-                ws.getCell(`${cfg.img[0]}${startRow + blockRows - 1}`),
-                ws.getCell(`${cfg.img[1]}${startRow + blockRows - 1}`)
-              ];
-              corners.forEach(c => c.border = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin });
             }
 
             startRow += (blockRows + 1);
@@ -1109,68 +1124,6 @@
         const fileName = `${title || 'report'}.xlsx`;
         saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
       });
-
-
-      function writeCategorySheet(ws, headerStyle, title, date, location, details, photos) {
-        const colWidths = [4, 14, 14, 18, 14, 14, 18, 14, 14, 18]; // A〜J
-        colWidths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
-
-        ws.getCell("A1").value = title;
-        ws.getCell("A1").font = { size: 14, bold: true };
-
-        ws.getCell("A3").value = "調査日";
-        ws.getCell("A3").style = headerStyle;
-        ws.mergeCells("B3:J3");
-        ws.getCell("B3").value = date || "-";
-
-        ws.getCell("A4").value = "設置場所";
-        ws.getCell("A4").style = headerStyle;
-        ws.mergeCells("B4:J4");
-        ws.getCell("B4").value = location || "-";
-
-        ws.getCell("A5").value = "調査内容";
-        ws.getCell("A5").style = headerStyle;
-        ws.mergeCells("B5:J6");
-        ws.getCell("B5").value = (details || "").replace(/\r?\n/g, "\n");
-        ws.getCell("B5").alignment = { wrapText: true, vertical: "top" };
-
-        let startRow = 8;
-        const perRow = 3;
-        const blockRows = 12;
-        const descAlign = { wrapText: true, vertical: "top" };
-
-        for (let i = 0; i < photos.length; i += perRow) {
-          for (let r = startRow; r < startRow + blockRows; r++) ws.getRow(r).height = 18;
-
-          const groupCols = [
-            { img: ["B", "C"], desc: "D" },
-            { img: ["E", "F"], desc: "G" },
-            { img: ["H", "I"], desc: "J" },
-          ];
-          for (let j = 0; j < perRow; j++) {
-            const p = photos[i + j];
-            if (!p) break;
-            const cfg = groupCols[j];
-
-            const imgRange = `${cfg.img[0]}${startRow}:${cfg.img[1]}${startRow + blockRows - 1}`;
-            ws.mergeCells(imgRange);
-
-            const descRange = `${cfg.desc}${startRow}:${cfg.desc}${startRow + blockRows - 1}`;
-            ws.mergeCells(descRange);
-            const descCell = ws.getCell(`${cfg.desc}${startRow}`);
-            descCell.value = p.caption || "";
-            descCell.alignment = descAlign;
-
-            const ext = p.dataUrl?.startsWith("data:image/png") ? "png" : "jpeg";
-            const base64 = (p.dataUrl || "").split(",")[1] || "";
-            if (base64) {
-              const imageId = ws.workbook.addImage({ base64, extension: ext });
-              ws.addImage(imageId, imgRange);
-            }
-          }
-          startRow += blockRows + 1;
-        }
-      }
 
       // 初回描画
       renderCategorySelector();
