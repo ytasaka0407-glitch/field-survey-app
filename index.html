@@ -163,6 +163,37 @@
         .form-row { grid-template-columns: 1fr; }
         .add-category { grid-template-columns: 1fr; }
       }
+      /* グリッド子要素が 1fr でも縮められるようにする（はみ出し防止） */
+      .form-row > * {
+        min-width: 0;
+      }
+
+      /* iOS Safari での date 入力はみ出し対策 */
+      input[type="date"] {
+        width: 100%;
+        max-width: 100%;
+        -webkit-appearance: none;
+        appearance: none;
+        min-height: 40px;   /* タップしやすさも確保 */
+        background-color: #fff;
+      }
+
+      /* 余分なボタン/インジケータの余白を詰める（ブラウザによって効かない場合あり） */
+      input[type="date"]::-webkit-inner-spin-button,
+      input[type="date"]::-webkit-clear-button {
+        display: none;
+      }
+      input[type="date"]::-webkit-calendar-picker-indicator {
+        margin: 0;
+        padding: 0;
+      }
+
+      /* 小画面では必ず縦並びにする（念のための保険） */
+      @media (max-width: 480px) {
+        .form-row {
+          grid-template-columns: 1fr;
+        }
+      }
       /* placeholder をはっきり灰色で表示 */
       input::placeholder,
       textarea::placeholder {
