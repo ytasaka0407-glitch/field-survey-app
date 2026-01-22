@@ -649,7 +649,7 @@
         const block = document.createElement("div");
         block.className = "card";
         block.innerHTML = `
-          <h3>${escapeHtml(cat)} <span class="badge">単一</span></h3>
+          <h3>${escapeHtml(cat)} </h3>
           <div class="form-row">
             <label for="date_${idBase}">調査日</label>
             <input id="date_${idBase}" type="date" value="${v.date || ""}" />
@@ -737,7 +737,7 @@
           seg.className = "card";
           seg.style.margin = "8px 0";
           seg.innerHTML = `
-            <div class="subsection-title">${escapeHtml(cat)} <span class="badge">複数</span></div>
+            <div class="subsection-title">${escapeHtml(cat)} </div>
             <div class="form-row">
               <label for="date_${idBase}">調査日</label>
               <input id="date_${idBase}" type="date" value="${stData.date || ""}" />
@@ -1061,7 +1061,7 @@
           ws.getCell('B3').font      = { name: 'Meiryo UI' };
           ws.getCell('B3').alignment = { horizontal: 'left' }; // 左寄せ
 
-          ws.getCell('A4').value = '場所'; ws.getCell('A4').style = labelStyle;
+          ws.getCell('A4').value = '設置場所'; ws.getCell('A4').style = labelStyle;
           ws.mergeCells('B4:J4'); ws.getCell('B4').value = v.location || '-';
           ws.getCell('B4').font  = { name: 'Meiryo UI' };
 
