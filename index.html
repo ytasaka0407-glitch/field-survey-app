@@ -1245,6 +1245,7 @@
 
       importExcelBtn?.addEventListener('click', () => importExcelFile.click());
 
+      // 置き換え版：基地局別のシートを正しく multi 項目へ反映
       importExcelFile?.addEventListener('change', async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -1253,7 +1254,7 @@
           const wb = new ExcelJS.Workbook();
           await wb.xlsx.load(buf);
 
-          // 1) 表紙（あなたの最新出力では G8=案件名, H10=日付 です）
+          // 1) 表紙（最新出力では G8=案件名, H10=日付）
           const cover = wb.getWorksheet('表紙');
           if (cover) {
             const titleCell = cover.getCell('H8').value;
@@ -1268,33 +1269,72 @@
 
           // 2) 各カテゴリシート（目次・表紙を除く）
           wb.worksheets.forEach((ws) => {
+            if (!ws) return;
             const name = ws.name;
-            if (!ws || name === '表紙' || name === '目次') return;
+            if (name === '表紙' || name === '目次') return;
 
-            const catName = String(ws.getCell('A1').value ?? '').trim();
-            if (!catName) return;
+            // タイトルセル（A1）とシート名から、single/multi とカテゴリ名・基地局名を判定
+            const label = String(ws.getCell('A1').value ?? '').trim();
+            const sheetName = String(ws.name ?? '').trim();
 
-            // 単一カテゴリのデータへ反映（現在の出力仕様に合わせて single を想定）
-            const v = ensureSingle(catName);
+            // 「カテゴリ名（基地局名）」を優先的に検出（日本語丸括弧）
+            let isMulti = false;
+            let catName = '';
+            let stationName = '';
 
-            // 調査日（B3、"yyyy/mm/dd" or Date）
-            const dCell = ws.getCell('B3').value;
-            const inDate = toInputDateString(dCell);
-            if (inDate) v.date = inDate;
+            const mLabel = label.match(/^(.*?)\s*（\s*(.*?)\s*）$/); // 例: "01.基地局_無線装置（札幌局）"
+            if (mLabel) {
+              isMulti     = true;
+              catName     = mLabel[1].trim();
+              stationName = mLabel[2].trim();
+            } else {
+              // フォールバック：シート名 "カテゴリ名 - 基地局名"
+              const mName = sheetName.match(/^(.*?)\s*-\s*(.*)$/);
+              if (mName) {
+                isMulti     = true;
+                catName     = mName[1].trim();
+                stationName = mName[2].trim();
+              } else {
+                // それ以外は単一カテゴリとして扱う
+                catName = label || sheetName || '';
+              }
+            }
 
-            // 設置場所（B4）
+            if (!catName) return; // 何も特定できない場合はスキップ
+
+            // 調査日（B3）、設置場所（B4）、調査内容（B5）を取得
+            const inDate = toInputDateString(ws.getCell('B3').value);
             const locVal = ws.getCell('B4').value;
-            v.location = (locVal ?? '').toString();
-
-            // 調査内容（B5、改行維持）
             const detVal = ws.getCell('B5').value;
-            v.details = (detVal ?? '').toString();
 
-            // 写真はインポート対象外（必要なら後で拡張）
-            if (!Array.isArray(v.photos)) v.photos = [];
+            if (isMulti) {
+              // multi（基地局別）カテゴリとして格納
+              const mv = ensureMulti(catName);
+              const stId = stationIdFromName(stationName || '基地局');
 
-            // 画面に表示
-            selectedCategories.add(catName);
+              // 共有基地局一覧へも反映（重複チェック）
+              if (!sharedStations.some(s => s.id === stId)) {
+                sharedStations.push({ id: stId, name: stationName || '基地局' });
+              }
+
+              const stData = getOrInitStationData(catName, stId);
+              if (inDate) stData.date = inDate;
+              stData.location = (locVal ?? '').toString();
+              stData.details  = (detVal ?? '').toString();
+              if (!Array.isArray(stData.photos)) stData.photos = [];
+
+              // 画面に表示されるようカテゴリを選択状態に
+              selectedCategories.add(catName);
+            } else {
+              // single（指令センター項目）として格納
+              const v = ensureSingle(catName);
+              if (inDate) v.date = inDate;
+              v.location = (locVal ?? '').toString();
+              v.details  = (detVal ?? '').toString();
+              if (!Array.isArray(v.photos)) v.photos = [];
+
+              selectedCategories.add(catName);
+            }
           });
 
           renderCategorySelector();
@@ -1307,6 +1347,7 @@
           alert('Excelの読み込みに失敗しました。ファイル形式とフォーマットをご確認ください。');
         }
       });
+      
       // 初回描画
       renderCategorySelector();
 
