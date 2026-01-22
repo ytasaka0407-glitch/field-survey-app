@@ -246,6 +246,8 @@
       <button id="saveBtn" class="btn">下書きを保存</button>
       <button id="loadBtn" class="btn">下書きを読み込み</button>
       <button id="exportExcelBtn" class="btn success">Excelにエクスポート</button>
+      <button id="importExcelBtn" class="btn">Excelから読み込み</button>
+      <input id="importExcelFile" type="file" accept=".xlsx" style="display:none" />
     </div>
 
     <footer class="app-footer">
@@ -365,6 +367,32 @@
       }
       function stationIdFromName(name) {
         return "st_" + hashId((name || "").trim().toLowerCase());
+      }
+      function toInputDateString(val) {
+        let d = null;
+        if (val instanceof Date) {
+          d = val;
+        } else if (val && typeof val === 'object' && 'result' in val) {
+          // ExcelJSが計算式の結果を持つ場合
+          return toInputDateString(val.result);
+        } else if (val && typeof val === 'object' && 'text' in val) {
+          // RichTextなどは text を優先
+          return toInputDateString(val.text);
+        } else if (typeof val === 'string') {
+          const s = val.trim();
+          const m = /^(\d{4})[\/\-](\d{2})[\/\-](\d{2})$/.exec(s);
+          if (m) d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+        } else if (typeof val === 'number') {
+          // Excelのシリアル日付（必要なら対応）
+          // 1900基準の簡易換算（うるう誤差は無視）
+          const epoch = new Date(Date.UTC(1899, 11, 30));
+          d = new Date(epoch.getTime() + val * 86400000);
+        }
+        if (!d || isNaN(d.getTime())) return '';
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
       }
 
       // 表紙の調査日自動反映（個別上書きは保持）
@@ -1149,7 +1177,74 @@
         const fileName = `${title || 'report'}.xlsx`;
         saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
       });
+      
+      const importExcelBtn  = document.getElementById('importExcelBtn');
+      const importExcelFile = document.getElementById('importExcelFile');
 
+      importExcelBtn?.addEventListener('click', () => importExcelFile.click());
+
+      importExcelFile?.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const buf = await file.arrayBuffer();
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buf);
+
+          // 1) 表紙（あなたの最新出力では G8=案件名, H10=日付 です）
+          const cover = wb.getWorksheet('表紙');
+          if (cover) {
+            const titleCell = cover.getCell('H8').value;
+            const dateCell  = cover.getCell('H10').value;
+            projectTitleEl.value = (titleCell ?? '').toString();
+            const inDate = toInputDateString(dateCell);
+            if (inDate) {
+              projectDateEl.value = inDate;
+              projectDatePrev     = inDate;
+            }
+          }
+
+          // 2) 各カテゴリシート（目次・表紙を除く）
+          wb.worksheets.forEach((ws) => {
+            const name = ws.name;
+            if (!ws || name === '表紙' || name === '目次') return;
+
+            const catName = String(ws.getCell('A1').value ?? '').trim();
+            if (!catName) return;
+
+            // 単一カテゴリのデータへ反映（現在の出力仕様に合わせて single を想定）
+            const v = ensureSingle(catName);
+
+            // 調査日（B3、"yyyy/mm/dd" or Date）
+            const dCell = ws.getCell('B3').value;
+            const inDate = toInputDateString(dCell);
+            if (inDate) v.date = inDate;
+
+            // 設置場所（B4）
+            const locVal = ws.getCell('B4').value;
+            v.location = (locVal ?? '').toString();
+
+            // 調査内容（B5、改行維持）
+            const detVal = ws.getCell('B5').value;
+            v.details = (detVal ?? '').toString();
+
+            // 写真はインポート対象外（必要なら後で拡張）
+            if (!Array.isArray(v.photos)) v.photos = [];
+
+            // 画面に表示
+            selectedCategories.add(catName);
+          });
+
+          renderCategorySelector();
+          renderCategories();
+
+          alert('Excelを読み込みました');
+          importExcelFile.value = ''; // リセット
+        } catch (err) {
+          console.error(err);
+          alert('Excelの読み込みに失敗しました。ファイル形式とフォーマットをご確認ください。');
+        }
+      });
       // 初回描画
       renderCategorySelector();
 
