@@ -941,116 +941,175 @@
       }
 
       // Excel出力
-      exportExcelBtn.addEventListener("click", async () => {
-        const title = (projectTitleEl.value || "").trim() || "-";
+      exportExcelBtn.addEventListener('click', async () => {
+        const title = (projectTitleEl.value || '').trim() || '-';
         const cats = [...selectedCategories];
-        if (cats.length === 0) {
-          if (!confirm("項目が未選択です。表紙と空の目次のみを出力しますか？")) return;
-        }
 
         const ExcelJSRef = window.ExcelJS;
         const wb = new ExcelJSRef.Workbook();
-        wb.creator = "現地調査レポートツール";
+        wb.creator = '現地調査レポートツール';
         wb.created = new Date();
-        wb.properties.title = "現地調査報告書";
+        wb.properties.title = '現地調査報告書';
 
-        const titleStyle = { font: { size: 18, bold: true }, alignment: { horizontal: "center", vertical: "middle" } };
-        const headerStyle = { font: { bold: true }, alignment: { vertical: "middle" } };
-
-        const projectDateStr = projectDateEl.value || "";
-        const exportDateStr  = formatDate(new Date());
+        // 共通スタイル
+        const headerStyle = { font: { bold: true }, alignment: { vertical: 'middle' } };
+        const titleStyle = { font: { size: 20, bold: true, name: 'Meiryo' }, alignment: { horizontal: 'center', vertical: 'middle' } };
+        const sectionTitleStyle = { font: { size: 14, bold: true, name: 'Meiryo' } };
+        const labelStyle = { font: { bold: true, name: 'Meiryo' } };
+        const borderThin = { style: 'thin', color: { argb: 'FF999999' } };
 
         // 表紙
-        const wsCover = wb.addWorksheet("表紙");
-        wsCover.properties.defaultRowHeight = 18;
+        const wsCover = wb.addWorksheet('表紙', {
+          pageSetup: {
+            paperSize: 9, // A4
+            orientation: 'portrait',
+            margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 }
+          },
+          headerFooter: {
+            oddFooter: '&Rページ &P / &N'
+          }
+        });
         for (let i = 1; i <= 8; i++) wsCover.getColumn(i).width = 16;
-        wsCover.mergeCells("A3:H6");
-        wsCover.getCell("A3").value = "現地調査報告書";
-        Object.assign(wsCover.getCell("A3"), { style: titleStyle });
-        wsCover.getCell("A8").value = "案件名";
-        wsCover.getCell("A8").style = headerStyle;
-        wsCover.mergeCells("B8:H8");
-        wsCover.getCell("B8").value = title;
-        wsCover.getCell("A10").value = "日付";
-        wsCover.getCell("A10").style = headerStyle;
-        wsCover.mergeCells("B10:H10");
-        wsCover.getCell("B10").value = projectDateStr || exportDateStr;
+        wsCover.mergeCells('A3:H6');
+        wsCover.getCell('A3').value = '現地調査報告書';
+        wsCover.getCell('A3').style = titleStyle;
+
+        wsCover.getCell('A8').value = '案件名';
+        wsCover.getCell('A8').style = labelStyle;
+        wsCover.mergeCells('B8:H8');
+        wsCover.getCell('B8').value = title;
+
+        wsCover.getCell('A10').value = '日付';
+        wsCover.getCell('A10').style = labelStyle;
+        wsCover.mergeCells('B10:H10');
+        wsCover.getCell('B10').value = formatDate(new Date());
+        wsCover.getCell('B10').numFmt = 'yyyy-mm-dd';
 
         // 目次
-        const wsToc = wb.addWorksheet("目次");
+        const wsToc = wb.addWorksheet('目次', {
+          pageSetup: { paperSize: 9, orientation: 'portrait' },
+          headerFooter: { oddFooter: '&Rページ &P / &N' }
+        });
         wsToc.getColumn(1).width = 40;
         wsToc.getColumn(2).width = 18;
-        wsToc.getCell("A1").value = "目次";
-        wsToc.getCell("A1").font = { size: 14, bold: true };
+        wsToc.getCell('A1').value = '目次';
+        wsToc.getCell('A1').style = sectionTitleStyle;
 
         const sheetNameMap = {};
         const usedNames = new Set();
-        let tocRow = 3;
-
-        const selectedSingles = cats.filter(c => (dataMap[c]?.mode || "single") === "single");
-        const selectedMultis = cats.filter(c => (dataMap[c]?.mode) === "multi");
-
-        // シート名（単一）
-        selectedSingles.forEach((cat) => {
+        cats.forEach(cat => {
           const name = makeUniqueSheetName(sanitizeSheetName(cat), usedNames);
-          sheetNameMap[cat] = name; usedNames.add(name);
-        });
-        // シート名（複数：基地局×項目）
-        sharedStations.forEach((st) => {
-          selectedMultis.forEach((cat) => {
-            const label = `${st.name} - ${cat}`;
-            const sname = makeUniqueSheetName(sanitizeSheetName(label), usedNames);
-            sheetNameMap[`${cat}|${st.id}`] = sname; usedNames.add(sname);
-          });
+          sheetNameMap[cat] = name;
+          usedNames.add(name);
         });
 
-        // 目次（単一）
-        selectedSingles.forEach((cat) => {
-          const v = dataMap[cat] || {};
+        let tocRow = 3;
+        cats.forEach(cat => {
           wsToc.getCell(`A${tocRow}`).value = { text: cat, hyperlink: `#'${sheetNameMap[cat]}'!A1` };
-          wsToc.getCell(`A${tocRow}`).font = { color: { argb: "FF1F4E79" }, underline: true };
-          const photoCount = (v.photos || []).length;
+          wsToc.getCell(`A${tocRow}`).font = { color: { argb: 'FF1F4E79' }, underline: true, name: 'Meiryo' };
+          const photoCount = (dataMap[cat]?.photos || []).length;
           wsToc.getCell(`B${tocRow}`).value = `写真 ${photoCount}枚`;
           tocRow++;
         });
-        // 目次（複数）
-        sharedStations.forEach((st) => {
-          selectedMultis.forEach((cat) => {
-            const v = dataMap[cat] || {};
-            const stData = (v.stationData || {})[st.id] || {};
-            const key = `${cat}|${st.id}`;
-            const display = `${st.name} - ${cat}`;
-            wsToc.getCell(`A${tocRow}`).value = { text: display, hyperlink: `#'${sheetNameMap[key]}'!A1` };
-            wsToc.getCell(`A${tocRow}`).font = { color: { argb: "FF1F4E79" }, underline: true };
-            const photoCount = (stData.photos || []).length;
-            wsToc.getCell(`B${tocRow}`).value = `写真 ${photoCount}枚`;
-            tocRow++;
-          });
-        });
 
-        // シート（単一）
-        for (const cat of selectedSingles) {
-          const v = dataMap[cat] || {};
-          const ws = wb.addWorksheet(sheetNameMap[cat]);
-          writeCategorySheet(ws, headerStyle, cat, (v.date || projectDateStr || ""), v.location || "", v.details || "", v.photos || []);
-        }
-        // シート（複数：基地局×項目）
-        sharedStations.forEach((st) => {
-          selectedMultis.forEach((cat) => {
-            const v = dataMap[cat] || {};
-            const stData = (v.stationData || {})[st.id] || { date: "", location: "", details: "", photos: [] };
-            const key = `${cat}|${st.id}`;
-            const titleText = `${st.name}（${cat}）`;
-            const ws = wb.addWorksheet(sheetNameMap[key]);
-            writeCategorySheet(ws, headerStyle, titleText, (stData.date || projectDateStr || ""), stData.location || "", stData.details || "", stData.photos || []);
+        // カテゴリシート
+        for (const cat of cats) {
+          const v = dataMap[cat] || { date:'', location:'', details:'', photos:[] };
+          const ws = wb.addWorksheet(sheetNameMap[cat], {
+            pageSetup: {
+              paperSize: 9, orientation: 'portrait',
+              fitToPage: true, fitToWidth: 1, fitToHeight: 0, // 横1ページに収める
+              margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 }
+            },
+            headerFooter: { oddFooter: '&Rページ &P / &N' }
           });
-        });
+
+          // 列幅（Aは余白）
+          const colWidths = [4, 14, 14, 18, 14, 14, 18, 14, 14, 18]; // A〜J
+          colWidths.forEach((w, i) => { ws.getColumn(i+1).width = w; });
+
+          // セクション見出し
+          ws.getCell('A1').value = cat;
+          ws.getCell('A1').style = sectionTitleStyle;
+
+          // 基本情報
+          ws.getCell('A3').value = '調査日'; ws.getCell('A3').style = labelStyle;
+          ws.mergeCells('B3:J3'); ws.getCell('B3').value = v.date || '-'; ws.getCell('B3').numFmt = 'yyyy-mm-dd';
+
+          ws.getCell('A4').value = '場所'; ws.getCell('A4').style = labelStyle;
+          ws.mergeCells('B4:J4'); ws.getCell('B4').value = v.location || '-';
+
+          ws.getCell('A5').value = '調査内容'; ws.getCell('A5').style = labelStyle;
+          ws.mergeCells('B5:J6');
+          ws.getCell('B5').value = (v.details || '').replace(/\r?\n/g, '\n');
+          ws.getCell('B5').alignment = { wrapText: true, vertical: 'top' };
+          // 枠線
+          ws.getCell('A3').border = { bottom: borderThin };
+          ws.getCell('A4').border = { bottom: borderThin };
+          ws.getCell('A5').border = { bottom: borderThin };
+          ws.getCell('B3').border = { bottom: borderThin };
+          ws.getCell('B4').border = { bottom: borderThin };
+          ws.getCell('B5').border = { bottom: borderThin };
+
+          // 写真：横3枚 × 縦に並べる
+          let startRow = 8;
+          const photos = v.photos || [];
+          const perRow = 3;
+          const blockRows = 12; // 画像高さ目安
+          const groups = [
+            { img: ['B','C'], desc: 'D' }, // 画像1
+            { img: ['E','F'], desc: 'G' }, // 画像2
+            { img: ['H','I'], desc: 'J' }  // 画像3
+          ];
+
+          for (let i = 0; i < photos.length; i += perRow) {
+            // 行高さ
+            for (let r = startRow; r < startRow + blockRows; r++) ws.getRow(r).height = 18;
+
+            for (let j = 0; j < perRow; j++) {
+              const p = photos[i + j];
+              if (!p) break;
+              const cfg = groups[j];
+
+              const imgRange = `${cfg.img[0]}${startRow}:${cfg.img[1]}${startRow + blockRows - 1}`;
+              const descRange = `${cfg.desc}${startRow}:${cfg.desc}${startRow + blockRows - 1}`;
+
+              // セル結合
+              ws.mergeCells(imgRange);
+              ws.mergeCells(descRange);
+
+              // 説明セルスタイル
+              const descCell = ws.getCell(`${cfg.desc}${startRow}`);
+              descCell.value = p.caption || '';
+              descCell.alignment = { wrapText: true, vertical: 'top' };
+              descCell.border = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+
+              // 画像貼付
+              const ext = p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg';
+              const base64 = p.dataUrl.split(',')[1];
+              const imageId = wb.addImage({ base64, extension: ext });
+              ws.addImage(imageId, imgRange);
+
+              // 画像枠線風に周囲へ細罫線（見栄え向上）
+              const corners = [
+                ws.getCell(`${cfg.img[0]}${startRow}`),
+                ws.getCell(`${cfg.img[1]}${startRow}`),
+                ws.getCell(`${cfg.img[0]}${startRow + blockRows - 1}`),
+                ws.getCell(`${cfg.img[1]}${startRow + blockRows - 1}`)
+              ];
+              corners.forEach(c => c.border = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin });
+            }
+
+            startRow += (blockRows + 1);
+          }
+        }
 
         // 出力
         const buf = await wb.xlsx.writeBuffer();
-        const fileName = `${title || "report"}.xlsx`;
-        saveAs(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), fileName);
+        const fileName = `${title || 'report'}.xlsx`;
+        saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
       });
+
 
       function writeCategorySheet(ws, headerStyle, title, date, location, details, photos) {
         const colWidths = [4, 14, 14, 18, 14, 14, 18, 14, 14, 18]; // A〜J
