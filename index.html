@@ -170,13 +170,13 @@
         opacity: 1; /* Safari等で薄すぎるのを防ぐ */
       }
       /* 「Excelから読み込み」ボタンを薄い緑に */
-      #importExcelBtn {
+      .btn.mint{
         background: #a7f3d0;      /* 薄いミント系の緑 */
         border-color: #a7f3d0;
         color: #064e3b;           /* 読みやすい濃い緑の文字色 */
       }
-      #importExcelBtn:hover { filter: brightness(0.96); }
-      #importExcelBtn:active { transform: scale(0.98); }
+      .btn.mint:hover { filter: brightness(0.96); }
+      .btn.mint:active { transform: scale(0.98); }
     </style>
   </head>
   <body>
@@ -254,7 +254,7 @@
       <button id="saveBtn" class="btn">下書きを保存</button>
       <button id="loadBtn" class="btn">下書きを読み込み</button>
       <button id="exportExcelBtn" class="btn success">Excelにエクスポート</button>
-      <button id="importExcelBtn" class="btn">Excelから読み込み</button>
+      <button id="importExcelBtn" class="btn mint">Excelから読み込み</button>
       <input id="importExcelFile" type="file" accept=".xlsx" style="display:none" />
     </div>
 
