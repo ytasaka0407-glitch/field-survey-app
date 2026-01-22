@@ -1042,32 +1042,71 @@
           pageSetup: { paperSize: 9, orientation: 'portrait' },
           headerFooter: { oddFooter: '&Rページ &P / &N' }
         });
-        wsToc.getColumn(1).width = 40;
+        wsToc.getColumn(1).width = 50;
         wsToc.getColumn(2).width = 18;
         wsToc.getCell('A1').value = '目次';
         wsToc.getCell('A1').style = sectionTitleStyle;
 
-        const sheetNameMap = {};
+        // 目次用エントリ（単一＋基地局別）
+        const selectedSingles = cats.filter(c => (dataMap[c]?.mode || 'single') === 'single');
+        const selectedMultis  = cats.filter(c => (dataMap[c]?.mode) === 'multi');
+
+        const entries = [];
+
+        // 単一カテゴリ
+        for (const cat of selectedSingles) {
+          const v = ensureSingle(cat);
+          entries.push({
+            type: 'single',
+            cat,
+            stationId: null,
+            stationName: null,
+            displayLabel: cat,
+            date: v.date || projectDateStr || '',
+            location: v.location || '',
+            details: v.details || '',
+            photos: Array.isArray(v.photos) ? v.photos : []
+          });
+        }
+
+        // 基地局カテゴリ：基地局ごとにエントリ作成
+        for (const cat of selectedMultis) {
+          const mv = ensureMulti(cat);
+          // sharedStations が空でも stationData にあるものがあれば出力する
+          const stationList =
+            sharedStations.length
+              ? sharedStations.slice()
+              : Object.keys(mv.stationData || {}).map(id => ({ id, name: id }));
+          for (const st of stationList) {
+            const stData = getOrInitStationData(cat, st.id);
+            entries.push({
+              type: 'multi',
+              cat,
+              stationId: st.id,
+              stationName: st.name,
+              displayLabel: `${cat}（${st.name}）`,
+              date: stData.date || projectDateStr || '',
+              location: stData.location || '',
+              details: stData.details || '',
+              photos: Array.isArray(stData.photos) ? stData.photos : []
+            });
+          }
+        }
+
+        // シート名のユニーク化
         const usedNames = new Set();
-        cats.forEach(cat => {
-          const name = makeUniqueSheetName(sanitizeSheetName(cat), usedNames);
-          sheetNameMap[cat] = name;
-          usedNames.add(name);
-        });
+        for (const e of entries) {
+          const base = e.type === 'single'
+            ? sanitizeSheetName(e.cat)
+            : sanitizeSheetName(`${e.cat} - ${e.stationName}`);
+          e.sheetName = makeUniqueSheetName(base, usedNames);
+          usedNames.add(e.sheetName);
+        }
 
-        let tocRow = 3;
-        cats.forEach(cat => {
-          wsToc.getCell(`A${tocRow}`).value = { text: cat, hyperlink: `#'${sheetNameMap[cat]}'!A1` };
-          wsToc.getCell(`A${tocRow}`).style = linkStyle;
-          wsToc.getCell(`B${tocRow}`).value = `写真 ${(dataMap[cat]?.photos || []).length}枚`;
-          wsToc.getCell(`B${tocRow}`).font  = { name: 'Meiryo UI' };
-          tocRow++;
-        });
-
-        // カテゴリシート
-        for (const cat of cats) {
-          const v  = dataMap[cat] || { date:'', location:'', details:'', photos:[] };
-          const ws = wb.addWorksheet(sheetNameMap[cat], {
+        // カテゴリ（単一 or 基地局別）シートの作成
+        const colLetterToIndex = (L) => L.charCodeAt(0) - 65; // 'A'→0
+        const addOneEntrySheet = async (entry) => {
+          const ws = wb.addWorksheet(entry.sheetName, {
             pageSetup: {
               paperSize: 9, orientation: 'portrait',
               fitToPage: true, fitToWidth: 1, fitToHeight: 0,
@@ -1083,11 +1122,13 @@
           const colWidths = [10, 16, 16, 18, 16, 16, 18, 16, 16, 18]; // A〜J
           colWidths.forEach((w, i) => ws.getColumn(i+1).width = w);
 
-          ws.getCell('A1').value = cat;
+          // タイトル（基地局名付き）
+          ws.getCell('A1').value = entry.displayLabel;
           ws.getCell('A1').style = sectionTitleStyle;
 
+          // 調査日
           ws.getCell('A3').value = '調査日'; ws.getCell('A3').style = labelStyle;
-          const d = fromInputDate(v.date || projectDateStr);
+          const d = fromInputDate(entry.date || projectDateStr);
           if (d) {
             ws.getCell('B3').value  = d;               // Date型
             ws.getCell('B3').numFmt = 'yyyy/mm/dd';
@@ -1097,13 +1138,15 @@
           ws.getCell('B3').font      = { name: 'Meiryo UI' };
           ws.getCell('B3').alignment = { horizontal: 'left' }; // 左寄せ
 
+          // 設置場所
           ws.getCell('A4').value = '設置場所'; ws.getCell('A4').style = labelStyle;
-          ws.mergeCells('B4:J4'); ws.getCell('B4').value = v.location || '-';
+          ws.mergeCells('B4:J4'); ws.getCell('B4').value = entry.location || '-';
           ws.getCell('B4').font  = { name: 'Meiryo UI' };
 
+          // 調査内容
           ws.getCell('A5').value = '調査内容'; ws.getCell('A5').style = labelStyle;
           ws.mergeCells('B5:J6');
-          ws.getCell('B5').value     = (v.details || '').replace(/\r?\n/g, '\n');
+          ws.getCell('B5').value     = (entry.details || '').replace(/\r?\n/g, '\n');
           ws.getCell('B5').alignment = { wrapText: true, vertical: 'top' };
           ws.getCell('B5').font      = { name: 'Meiryo UI' };
 
@@ -1116,7 +1159,7 @@
 
           // 画像：横3枚×縦に並べる（縦横比維持、画像枠線なし）
           let startRow = 8;
-          const photos = v.photos || [];
+          const photos = entry.photos || [];
           const perRow = 3;
           const blockRows = 12; // 画像エリア高さ目安
           const groups = [
@@ -1126,7 +1169,6 @@
           ];
 
           // 簡易換算（Excelの列幅→ピクセル、行高(ポイント)→ピクセル）
-          const colLetterToIndex = (L) => L.charCodeAt(0) - 65; // 'A'→0
           const colPixels = (colIdx) => (ws.getColumn(colIdx+1).width || 10) * 7; // 約換算
           const rowPixels = (rowIdx) => (ws.getRow(rowIdx).height || 18) * 1.333; // 1pt≈1.333px
 
@@ -1157,13 +1199,10 @@
               const drawW  = Math.max(1, Math.floor(imgW * ratio));
               const drawH  = Math.max(1, Math.floor(imgH * ratio));
 
-              // 画像配置（左上に寄せる。中央にしたい場合は col/row を微調整）
+              // 画像配置
               ws.addImage(
                 wb.addImage({ base64: p.dataUrl.split(',')[1], extension: p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg' }),
-                {
-                  tl:  { col: startColIndex, row: startRow - 1 }, // セル基準（0始まり）
-                  ext: { width: drawW, height: drawH }            // ピクセル
-                }
+                { tl: { col: startColIndex, row: startRow - 1 }, ext: { width: drawW, height: drawH } }
               );
 
               // 説明セル
@@ -1178,6 +1217,21 @@
 
             startRow += (blockRows + 1);
           }
+        };
+
+        // 実シート作成
+        for (const e of entries) {
+          await addOneEntrySheet(e);
+        }
+
+        // 目次のリンクと写真枚数
+        let tocRow = 3;
+        for (const e of entries) {
+          wsToc.getCell(`A${tocRow}`).value = { text: e.displayLabel, hyperlink: `#'${e.sheetName}'!A1` };
+          wsToc.getCell(`A${tocRow}`).style = linkStyle;
+          wsToc.getCell(`B${tocRow}`).value = `写真 ${(e.photos || []).length}枚`;
+          wsToc.getCell(`B${tocRow}`).font  = { name: 'Meiryo UI' };
+          tocRow++;
         }
 
         // 出力
