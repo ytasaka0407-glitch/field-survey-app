@@ -1,0 +1,177 @@
+/* assets/css/styles.css */
+:root {
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --text: #222;
+  --muted: #666;
+  --primary: #2d7ef7;
+  --success: #2fa36b;
+  --border: #e5e7eb;
+  --danger: #c0392b;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+}
+.app-header, .app-footer {
+  background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 16px;
+}
+.app-footer { border-top: 1px solid var(--border); border-bottom: none; text-align: center; }
+.container { max-width: 980px; margin: 0 auto; padding: 16px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+h1, h2, h3 { margin: 0 0 12px; }
+.muted { color: var(--muted); font-size: 12px; }
+
+.form-row {
+  display: grid; grid-template-columns: 140px 1fr; gap: 10px; align-items: center; margin-bottom: 10px;
+}
+.form-row label { color: var(--muted); }
+input[type="text"], input[type="date"], textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font-size: 16px;
+}
+textarea { min-height: 96px; resize: vertical; } /* 高さのみ変更可能（幅は固定） */
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
+  padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--text); font-size: 16px; cursor: pointer;
+}
+.btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn.success { background: var(--success); color: #fff; border-color: var(--success); }
+.btn.danger { color: #fff; background: var(--danger); border-color: var(--danger); }
+.btn:active { transform: scale(0.98); }
+
+.category-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.category-list { display: flex; flex-direction: column; gap: 10px; }
+.category-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: #fff; border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px;
+}
+.category-left { display: flex; align-items: center; gap: 8px; }
+.badge {
+  font-size: 11px; color: #555; background: #eef2ff; border: 1px solid #dbe2ff; border-radius: 999px; padding: 2px 8px;
+}
+.category-actions { display:flex; align-items:center; gap:6px; }
+.icon-btn {
+  border:none; background:transparent; cursor:pointer; color:#999; font-size:16px; line-height:1;
+}
+.icon-btn:hover { color:#666; }
+
+.add-category {
+  display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px;
+}
+
+/* 共有基地局マネージャ */
+.shared-stations {
+  margin-top: 16px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: #fafbff;
+}
+.station-list {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+}
+.station-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 6px 10px;
+}
+.station-chip .name { font-size: 14px; }
+.station-chip .remove { border: none; background: transparent; color: var(--danger); cursor: pointer; }
+
+.photos { margin-top: 8px; }
+.photo-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.photo-item { background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.photo-item img { width: 100%; height: 120px; object-fit: cover; display: block; }
+.photo-item .caption { padding: 8px; border-top: 1px solid var(--border); }
+.photo-item .caption input {
+  width: 100%; font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+}
+.photo-item .footer {
+  padding: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted);
+}
+.photo-item .remove {
+  background: transparent; border: none; color: var(--danger); cursor: pointer; font-size: 12px;
+}
+
+.station-block {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 10px 0 16px 0;
+  background: #fafbff;
+}
+.station-header {
+  display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px;
+}
+.station-title { font-weight: bold; }
+
+.subsection-title {
+  font-weight: bold;
+  margin: 12px 0 4px 0;
+}
+
+/* 常時表示のフローティング操作バー */
+.floating-controls {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  gap: 8px;
+  backdrop-filter: saturate(1.2) blur(4px);
+}
+@media (max-width: 720px) {
+  .floating-controls {
+    left: 8px; right: 8px; bottom: 8px; justify-content: space-between;
+  }
+}
+
+@media (max-width: 900px) {
+  .category-groups { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .form-row { grid-template-columns: 1fr; }
+  .add-category { grid-template-columns: 1fr; }
+}
+/* グリッド子要素が 1fr でも縮められるようにする（はみ出し防止） */
+.form-row > * { min-width: 0; }
+
+/* iOS Safari での date 入力はみ出し対策 */
+input[type="date"] {
+  width: 100%;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 40px;   /* タップしやすさも確保 */
+  background-color: #fff;
+}
+input[type="date"]::-webkit-inner-spin-button,
+input[type="date"]::-webkit-clear-button { display: none; }
+input[type="date"]::-webkit-calendar-picker-indicator { margin: 0; padding: 0; }
+
+/* 小画面では必ず縦並びにする（念のための保険） */
+@media (max-width: 480px) {
+  .form-row { grid-template-columns: 1fr; }
+}
+/* placeholder をはっきり灰色で表示 */
+input::placeholder, textarea::placeholder {
+  color: var(--muted);
+  opacity: 1; /* Safari等で薄すぎるのを防ぐ */
+}
+/* 「Excelから読み込み」ボタンを薄い緑に */
+.btn.mint{
+  background: #a7f3d0;      /* 薄いミント系の緑 */
+  border-color: #a7f3d0;
+  color: #064e3b;           /* 読みやすい濃い緑の文字色 */
+}
+.btn.mint:hover { filter: brightness(0.96); }
+.btn.mint:active { transform: scale(0.98); }
