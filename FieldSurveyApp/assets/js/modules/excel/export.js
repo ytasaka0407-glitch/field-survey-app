@@ -1,5 +1,7 @@
+// FieldSurveyApp/assets/js/modules/excel/export.js
 import { dataMap, selectedCategories, ensureSingle, ensureMulti, getOrInitStationData } from '../state.js';
 import { sanitizeSheetName, makeUniqueSheetName, fromInputDate, getImageDim } from '../utils.js';
+import { getSchemaFor } from '../ui/schemas.js';
 
 export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const ExcelJSRef = window.ExcelJS;
@@ -18,11 +20,12 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const exportDate     = new Date();
   const coverDate      = fromInputDate(projectDateStr) || exportDate;
 
+  // 表紙
   const wsCover = wb.addWorksheet('表紙', {
     pageSetup: { paperSize: 9, orientation: 'portrait', margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 } },
     headerFooter: { oddFooter: '&Rページ &P / &N' }
   });
-  for (let i = 1; i <= 8; i++) wsCover.getColumn(i).width = 16;
+  for (let i = 1; i <= 12; i++) wsCover.getColumn(i).width = 16;
   wsCover.mergeCells('A3:H6');
   wsCover.getCell('A3').value = '現地調査報告書';
   wsCover.getCell('A3').style = titleStyle;
@@ -34,6 +37,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   wsCover.getCell('H10').font = { name: 'Meiryo UI' };
   wsCover.getCell('H10').alignment = { horizontal: 'left' };
 
+  // 目次
   const wsToc = wb.addWorksheet('目次', { pageSetup: { paperSize: 9, orientation: 'portrait' }, headerFooter: { oddFooter: '&Rページ &P / &N' } });
   wsToc.getColumn(1).width = 50;
   wsToc.getColumn(2).width = 18;
@@ -47,14 +51,14 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const entries = [];
   for (const cat of selectedSingles) {
     const v = ensureSingle(cat, projectDateStr);
-    entries.push({ type: 'single', cat, stationId: null, stationName: null, displayLabel: cat, date: v.date || projectDateStr || '', location: v.location || '', details: v.details || '', photos: Array.isArray(v.photos) ? v.photos : [] });
+    entries.push({ type: 'single', cat, stationId: null, stationName: null, displayLabel: cat, model: v });
   }
   for (const cat of selectedMultis) {
     const mv = ensureMulti(cat, projectDateStr);
     const stationList = sharedStations.length ? sharedStations.slice() : Object.keys(mv.stationData || {}).map(id => ({ id, name: id }));
     for (const st of stationList) {
       const stData = getOrInitStationData(cat, st.id, projectDateStr);
-      entries.push({ type: 'multi', cat, stationId: st.id, stationName: st.name, displayLabel: `${cat}（${st.name}）`, date: stData.date || projectDateStr || '', location: stData.location || '', details: stData.details || '', photos: Array.isArray(stData.photos) ? stData.photos : [] });
+      entries.push({ type: 'multi', cat, stationId: st.id, stationName: st.name, displayLabel: `${cat}（${st.name}）`, model: stData });
     }
   }
 
@@ -66,36 +70,40 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   }
 
   const colLetterToIndex = (L) => L.charCodeAt(0) - 65;
+
   async function addOneEntrySheet(entry) {
     const ws = wb.addWorksheet(entry.sheetName, {
       pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
       headerFooter: { oddFooter: '&Rページ &P / &N' }
     });
     ws.views = [{ showGridLines: false }];
-    const colWidths = [10, 16, 16, 18, 16, 16, 18, 16, 16, 18];
+
+    // 列幅設定 + メタキー用のK列は非表示にする
+    const colWidths = [10, 16, 16, 18, 16, 16, 18, 16, 16, 18, 10, 10]; // A〜L
     colWidths.forEach((w, i) => ws.getColumn(i+1).width = w);
+    ws.getColumn(11).hidden = true; // K列（フィールドキー格納）
 
     ws.getCell('A1').value = entry.displayLabel;
     ws.getCell('A1').style = sectionTitleStyle;
 
+    // 基本項目
     ws.getCell('A3').value = '調査日'; ws.getCell('A3').style = labelStyle;
-    const d = fromInputDate(entry.date || projectDateStr);
+    const d = fromInputDate(entry.model.date || projectDateStr);
     if (d) { ws.getCell('B3').value = d; ws.getCell('B3').numFmt = 'yyyy/mm/dd'; }
     else { ws.getCell('B3').value = '-'; }
     ws.getCell('B3').font = { name: 'Meiryo UI' };
     ws.getCell('B3').alignment = { horizontal: 'left' };
 
     ws.getCell('A4').value = '設置場所'; ws.getCell('A4').style = labelStyle;
-    ws.mergeCells('B4:J4'); ws.getCell('B4').value = entry.location || '-';
+    ws.mergeCells('B4:J4'); ws.getCell('B4').value = entry.model.location || '-';
     ws.getCell('B4').font  = { name: 'Meiryo UI' };
 
     ws.getCell('A5').value = '調査内容'; ws.getCell('A5').style = labelStyle;
     ws.mergeCells('B5:J6');
-    ws.getCell('B5').value     = (entry.details || '').replace(/\r?\n/g, '\n');
+    ws.getCell('B5').value     = (entry.model.details || '').replace(/\r?\n/g, '\n');
     ws.getCell('B5').alignment = { wrapText: true, vertical: 'top' };
     ws.getCell('B5').font      = { name: 'Meiryo UI' };
 
-    const borderThin        = { style: 'thin', color: { argb: 'FF999999' } };
     ws.getCell('A3').border = { bottom: borderThin };
     ws.getCell('A4').border = { bottom: borderThin };
     ws.getCell('A5').border = { bottom: borderThin };
@@ -103,8 +111,35 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.getCell('B4').border = { bottom: borderThin };
     ws.getCell('B5').border = { bottom: borderThin };
 
-    let startRow = 8;
-    const photos = entry.photos || [];
+    // 追加項目セクション
+    const schema = getSchemaFor(entry.cat, entry.type === 'multi' ? 'multi' : 'single');
+    const extraFields = schema.filter(f => !['date','location','details','photos'].includes(f.key));
+
+    let extraStartRow = 7;
+    if (extraFields.length) {
+      ws.getCell(`A${extraStartRow}`).value = '追加項目';
+      ws.getCell(`A${extraStartRow}`).style = labelStyle;
+      extraStartRow++;
+
+      for (let i = 0; i < extraFields.length; i++) {
+        const f = extraFields[i];
+        const row = extraStartRow + i;
+        ws.getCell(`A${row}`).value = f.label || f.key;
+        ws.getCell(`A${row}`).font  = { name: 'Meiryo UI' };
+        ws.mergeCells(`B${row}:J${row}`);
+        let val = entry.model[f.key];
+        // Excelでは文字列で保持（必要に応じて型に合わせたnumFmt等を追加）
+        ws.getCell(`B${row}`).value = (val ?? '').toString();
+        ws.getCell(`B${row}`).alignment = { wrapText: true, vertical: 'top' };
+        ws.getCell(`B${row}`).font = { name: 'Meiryo UI' };
+        // インポート用のキーをK列に格納（列は非表示）
+        ws.getCell(`K${row}`).value = f.key;
+      }
+    }
+
+    // 写真
+    let startRow = (extraFields.length ? (extraStartRow + extraFields.length + 1) : 8);
+    const photos = Array.isArray(entry.model.photos) ? entry.model.photos : [];
     const perRow = 3;
     const blockRows = 12;
     const groups = [
@@ -126,6 +161,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
         const containerW = colPixels(startColIndex) + colPixels(endColIndex);
         let containerH = 0;
         for (let rr = startRow; rr < startRow + blockRows; rr++) containerH += rowPixels(rr);
+
         const { w: imgW, h: imgH } = await getImageDim(p.dataUrl);
         const ratioW = containerW / imgW;
         const ratioH = containerH / imgH;
@@ -153,14 +189,19 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   for (const e of entries) {
     await addOneEntrySheet(e);
   }
+
+  // 目次
   let tocRow = 3;
   for (const e of entries) {
     wsToc.getCell(`A${tocRow}`).value = { text: e.displayLabel, hyperlink: `#'${e.sheetName}'!A1` };
     wsToc.getCell(`A${tocRow}`).style = linkStyle;
-    wsToc.getCell(`B${tocRow}`).value = `写真 ${(e.photos || []).length}枚`;
+    const photosCount = Array.isArray(e.model.photos) ? e.model.photos.length : 0;
+    wsToc.getCell(`B${tocRow}`).value = `写真 ${photosCount}枚`;
     wsToc.getCell(`B${tocRow}`).font  = { name: 'Meiryo UI' };
     tocRow++;
   }
+
+  // 保存
   const buf = await wb.xlsx.writeBuffer();
   const fileName = `${(projectTitle || 'report').trim() || 'report'}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
