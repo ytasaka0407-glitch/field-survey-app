@@ -1,11 +1,42 @@
 // FieldSurveyApp/assets/js/modules/ui/fields.js
+import { readFileAsDataURL, resizeImage } from '../utils.js';
 
 export const FieldRenderers = {
+  date: (container, model, field, fid) => {
+    container.insertAdjacentHTML('beforeend', `
+      <div class="form-row">
+        <label for="${fid}">${field.label}</label>
+        <input id="${fid}" type="date" value="${model[field.key] || ''}" />
+      </div>`);
+    container.querySelector(`#${fid}`)
+      .addEventListener('change', e => (model[field.key] = e.target.value));
+  },
+
+  text: (container, model, field, fid) => {
+    container.insertAdjacentHTML('beforeend', `
+      <div class="form-row">
+        <label for="${fid}">${field.label}</label>
+        <input id="${fid}" type="text" placeholder="${field.placeholder || ''}" value="${model[field.key] || ''}" />
+      </div>`);
+    container.querySelector(`#${fid}`)
+      .addEventListener('input', e => (model[field.key] = e.target.value));
+  },
+
   number: (container, model, field, fid) => {
     container.insertAdjacentHTML('beforeend', `
       <div class="form-row">
         <label for="${fid}">${field.label}</label>
         <input id="${fid}" type="number" step="any" value="${model[field.key] ?? ''}" />
+      </div>`);
+    container.querySelector(`#${fid}`)
+      .addEventListener('input', e => (model[field.key] = e.target.value));
+  },
+
+  textarea: (container, model, field, fid) => {
+    container.insertAdjacentHTML('beforeend', `
+      <div class="form-row">
+        <label for="${fid}">${field.label}</label>
+        <textarea id="${fid}" placeholder="${field.placeholder || ''}">${model[field.key] || ''}</textarea>
       </div>`);
     container.querySelector(`#${fid}`)
       .addEventListener('input', e => (model[field.key] = e.target.value));
@@ -76,3 +107,9 @@ export const FieldRenderers = {
     renderPhotoList();
   },
 };
+
+export function renderField(container, model, field, fid) {
+  const fn = FieldRenderers[field.type];
+  if (!fn) return;
+  fn(container, model, field, fid);
+}
