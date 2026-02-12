@@ -3,14 +3,16 @@
 export const baseSingleSchema = [
   { key: 'date', type: 'date', label: '調査日', required: true },
   { key: 'location', type: 'text', label: '設置場所', placeholder: '設置する箇所をなるべく詳細に記載' },
-  { key: 'details', type: 'textarea', label: '調査内容', placeholder: '現地での調査事項、寸法、注意点など' },
+  { key: 'method', type: 'text', label: '設置方法', placeholder: '設置方法を記載　例)既設位置に入替など' },
+  { key: 'details', type: 'textarea', label: 'その他調査内容', placeholder: '現地での調査事項、寸法、注意点など' },
   { key: 'photos', type: 'photos', label: '写真' },
 ];
 
 export const baseMultiSchema = [
   { key: 'date', type: 'date', label: '調査日', required: true },
   { key: 'location', type: 'text', label: '設置場所', placeholder: '設置する箇所をなるべく詳細に記載' },
-  { key: 'details', type: 'textarea', label: '調査内容', placeholder: '現地での調査事項、寸法、注意点など' },
+  { key: 'method', type: 'text', label: '設置方法', placeholder: '設置方法を記載　例)既設位置に入替など' },
+  { key: 'details', type: 'textarea', label: 'その他調査内容', placeholder: '現地での調査事項、寸法、注意点など' },
   { key: 'photos', type: 'photos', label: '写真' },
 ];
 
@@ -35,4 +37,5 @@ export function getSchemaFor(cat, mode) {
   return mode === 'multi' ? baseMultiSchema : baseSingleSchema;
 
 }
+
 
