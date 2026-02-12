@@ -43,7 +43,7 @@ export const FieldRenderers = {
   },
 
   photos: (container, model, field, fidBase) => {
-    const key = field.key; // 'photos'
+    const key = field.key;
     if (!Array.isArray(model[key])) model[key] = [];
 
     container.insertAdjacentHTML('beforeend', `
