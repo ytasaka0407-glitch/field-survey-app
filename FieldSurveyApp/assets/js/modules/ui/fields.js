@@ -1,46 +1,20 @@
 // FieldSurveyApp/assets/js/modules/ui/fields.js
-import { readFileAsDataURL, resizeImage } from '../utils.js';
 
 export const FieldRenderers = {
-  date: (container, model, field, fid) => {
-    container.insertAdjacentHTML('beforeend', `
-      <div class="form-row">
-        <label for="${fid}">${field.label}</label>
-        <input id="${fid}" type="date" value="${model[field.key] || ''}" />
-      </div>`);
-    container.querySelector(`#${fid}`)
-      .addEventListener('change', e => (model[field.key] = e.target.value));
-  },
-  text: (container, model, field, fid) => {
-    container.insertAdjacentHTML('beforeend', `
-      <div class="form-row">
-        <label for="${fid}">${field.label}</label>
-        <input id="${fid}" type="text" placeholder="${field.placeholder || ''}" value="${model[field.key] || ''}" />
-      </div>`);
-    container.querySelector(`#${fid}`)
-      .addEventListener('input', e => (model[field.key] = e.target.value));
-  },
   number: (container, model, field, fid) => {
     container.insertAdjacentHTML('beforeend', `
       <div class="form-row">
         <label for="${fid}">${field.label}</label>
-        <input id="${fid}\" type="number" step="any" value="${model[field.key] ?? ''}" />
+        <input id="${fid}" type="number" step="any" value="${model[field.key] ?? ''}" />
       </div>`);
     container.querySelector(`#${fid}`)
       .addEventListener('input', e => (model[field.key] = e.target.value));
   },
-  textarea: (container, model, field, fid) => {
-    container.insertAdjacentHTML('beforeend', `
-      <div class="form-row">
-        <label for="${fid}">${field.label}</label>
-        <textarea id="${fid}" placeholder="${field.placeholder || ''}">${model[field.key] || ''}</textarea>
-      </div>`);
-    container.querySelector(`#${fid}`)
-      .addEventListener('input', e => (model[field.key] = e.target.value));
-  },
+
   photos: (container, model, field, fidBase) => {
     const key = field.key; // 'photos'
     if (!Array.isArray(model[key])) model[key] = [];
+
     container.insertAdjacentHTML('beforeend', `
       <div class="form-row">
         <label>${field.label}</label>
@@ -74,7 +48,7 @@ export const FieldRenderers = {
             <input type="text" placeholder="説明（キャプション）" value="${p.caption || ''}" />
           </div>
           <div class="footer">
-            <span>${p.name || \`photo_\${idx + 1}.jpg\`}</span>
+            <span>${p.name || `photo_${idx + 1}.jpg`}</span>
             <button class="remove">削除</button>
           </div>`;
         item.querySelector('input').addEventListener('input', e => (p.caption = e.target.value || ''));
@@ -85,6 +59,7 @@ export const FieldRenderers = {
         listEl.appendChild(item);
       });
     };
+
     async function handleFiles(fileList) {
       for (const file of fileList) {
         if (!file.type.startsWith('image/')) continue;
@@ -94,14 +69,10 @@ export const FieldRenderers = {
       }
       renderPhotoList();
     }
+
     camInput.addEventListener('change', e => handleFiles(e.target.files));
     fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
     renderPhotoList();
   },
 };
-
-export function renderField(container, model, field, fid) {
-  const fn = FieldRenderers[field.type];
-  if (!fn) return;
-  fn(container, model, field, fid);
-}
