@@ -16,6 +16,11 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const linkStyle         = { font: { color: { argb: 'FF1F4E79' }, underline: true, name: 'Meiryo UI' } };
   const borderThin        = { style: 'thin', color: { argb: 'FF999999' } };
 
+  // 単一カテゴリの“基本欄”として上部に出力したい追加項目（ここに追記していく）
+  const CORE_SINGLE_EXTRA_FIELDS = [
+    { key: 'method', label: '設置方法' }, // ← 追加したい項目
+  ];
+
   const projectDateStr = projectDate || '';
   const exportDate     = new Date();
   const coverDate      = fromInputDate(projectDateStr) || exportDate;
@@ -86,7 +91,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.getCell('A1').value = entry.displayLabel;
     ws.getCell('A1').style = sectionTitleStyle;
 
-    // 基本項目
+    // 基本項目（既存3項目）
     ws.getCell('A3').value = '調査日'; ws.getCell('A3').style = labelStyle;
     const d = fromInputDate(entry.model.date || projectDateStr);
     if (d) { ws.getCell('B3').value = d; ws.getCell('B3').numFmt = 'yyyy/mm/dd'; }
@@ -111,15 +116,28 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.getCell('B4').border = { bottom: borderThin };
     ws.getCell('B5').border = { bottom: borderThin };
 
-    // 追加項目セクション
-    const schema = getSchemaFor(entry.cat, entry.type === 'multi' ? 'multi' : 'single');
-    const extraFields = schema.filter(f => !['date','location','details','photos'].includes(f.key));
+    // ここから“基本欄として出す追加項目（単一カテゴリ用）”
+    let nextRow = 7; // A7/B7 から追記
+    if (entry.type === 'single' && CORE_SINGLE_EXTRA_FIELDS.length) {
+      for (const f of CORE_SINGLE_EXTRA_FIELDS) {
+        ws.getCell(`A${nextRow}`).value = f.label;
+        ws.getCell(`A${nextRow}`).style = labelStyle;
+        ws.mergeCells(`B${nextRow}:J${nextRow}`);
+        ws.getCell(`B${nextRow}`).value = (entry.model[f.key] ?? '').toString() || '-';
+        ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
+        nextRow++;
+      }
+    }
 
-    let extraStartRow = 7;
+    // “追加項目”セクション（スキーマ定義に基づく。コア扱いのキーは除外）
+    const schema = getSchemaFor(entry.cat, entry.type === 'multi' ? 'multi' : 'single');
+    const CORE_KEYS = new Set(['date','location','details','photos','method']); // ← method をコア扱いで除外
+    const extraFields = schema.filter(f => !CORE_KEYS.has(f.key));
+
     if (extraFields.length) {
-      ws.getCell(`A${extraStartRow}`).value = '追加項目';
-      ws.getCell(`A${extraStartRow}`).style = labelStyle;
-      extraStartRow++;
+      ws.getCell(`A${nextRow}`).value = '追加項目';
+      ws.getCell(`A${nextRow}`).style = labelStyle;
+      let extraStartRow = nextRow + 1;
 
       for (let i = 0; i < extraFields.length; i++) {
         const f = extraFields[i];
@@ -127,18 +145,17 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
         ws.getCell(`A${row}`).value = f.label || f.key;
         ws.getCell(`A${row}`).font  = { name: 'Meiryo UI' };
         ws.mergeCells(`B${row}:J${row}`);
-        let val = entry.model[f.key];
-        // Excelでは文字列で保持（必要に応じて型に合わせたnumFmt等を追加）
+        const val = entry.model[f.key];
         ws.getCell(`B${row}`).value = (val ?? '').toString();
         ws.getCell(`B${row}`).alignment = { wrapText: true, vertical: 'top' };
         ws.getCell(`B${row}`).font = { name: 'Meiryo UI' };
-        // インポート用のキーをK列に格納（列は非表示）
-        ws.getCell(`K${row}`).value = f.key;
+        ws.getCell(`K${row}`).value = f.key; // インポート用キー
       }
+      nextRow = extraStartRow + extraFields.length;
     }
 
-    // 写真
-    let startRow = (extraFields.length ? (extraStartRow + extraFields.length + 1) : 8);
+    // 写真セクション（“基本欄追加”と“追加項目”の後ろに1行空けて配置）
+    let startRow = nextRow + 1;
     const photos = Array.isArray(entry.model.photos) ? entry.model.photos : [];
     const perRow = 3;
     const blockRows = 12;
