@@ -220,6 +220,16 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
   // 保存
   const buf = await wb.xlsx.writeBuffer();
-  const fileName = `${(projectTitle || 'report').trim() || 'report'}.xlsx`;
+  // 例: 「案件名_現地調査レポート.xlsx」
+  // 空の場合は「現地調査レポート.xlsx」
+  const title = (projectTitle || '').trim();
+  const suffix = '現地調査レポート';
+  const namePart = title ? `${title}_${suffix}` : suffix;
+  
+  // Windows等で無効な文字を避けるため簡易サニタイズ
+  const safeNamePart = namePart.replace(/[\\/:*?"<>|]/g, '_');
+  
+  const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
+
