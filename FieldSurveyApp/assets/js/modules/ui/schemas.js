@@ -26,6 +26,15 @@ export const categorySchemaOverrides = {
   //   { key: 'condition', type: 'textarea', label: '劣化状況' },
   //   { key: 'photos', type: 'photos', label: '写真' },
   // ],
+   '07.基地局_アンテナ': [
+     { key: 'date', type: 'date', label: '調査日', required: true },
+     { key: 'type', type: 'text', label: '型式' },
+     { key: 'direction', type: 'text', label: '方向' },
+     { key: 'height', type: 'number', label: '高さ(m)' },
+     { key: 'mount', type: 'text', label: '支持方法' },
+     { key: 'condition', type: 'textarea', label: '劣化状況' },
+     { key: 'photos', type: 'photos', label: '写真' },
+   ],
 };
 
 // モードとカテゴリ名からスキーマを返す
@@ -33,4 +42,5 @@ export function getSchemaFor(cat, mode) {
   const override = categorySchemaOverrides[cat];
   if (override && Array.isArray(override)) return override;
   return mode === 'multi' ? baseMultiSchema : baseSingleSchema;
+
 }
