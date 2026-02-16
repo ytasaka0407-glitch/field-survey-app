@@ -8,6 +8,25 @@ const CORE_SINGLE_EXTRA_FIELDS = [
   { key: 'method', label: '設置方法' },
 ];
 
+function cellToPlainText(val) {
+  if (val == null) return '';
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  // 計算式の結果
+  if (val && typeof val === 'object' && 'result' in val) {
+    return cellToPlainText(val.result);
+  }
+  // RichText（Excelで太字等を含む場合）
+  if (val && typeof val === 'object' && Array.isArray(val.richText)) {
+    return val.richText.map(rt => rt.text || '').join('');
+  }
+  // hyperlink等
+  if (val && typeof val === 'object' && ('text' in val || 'hyperlink' in val)) {
+    return String(val.text || val.hyperlink || '');
+  }
+  try { return String(val); } catch { return ''; }
+}
+
 // 画像Buffer → DataURL変換ヘルパー
 function bufferToDataUrl(buffer, extension) {
   const mime = extension === 'png' ? 'image/png' : 'image/jpeg';
@@ -161,11 +180,32 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       for (const meta of images) {
         const img = wb.getImage(meta.imageId);
         if (!img || !img.buffer) continue;
-        // 画像のtop-left行（exportのtl.rowは0始まりなので+1）
-        const startRow = Math.round((meta.tl?.row ?? 0) + 1);
-        // 説明は右側カラムの開始セル（DESC_COL_START）にある前提
-        const capCell = ws.getCell(`${DESC_COL_START}${startRow}`).value;
-        const caption = (capCell ?? '').toString();
+    
+        // 画像の左上行（0始まり）→ 1始まりへ（切り上げだとズレやすいので floor を使用）
+        const approxRow = Math.floor((meta.tl?.row ?? 0) + 1);
+    
+        // 説明欄の開始列は export.js の DESC_COL_START と一致させる
+        const DESC_COL_START = 'G';
+    
+        // まずは想定行（approxRow）を試し、入っていなければ近傍をスキャンして取得
+        let caption = '';
+        const candidates = [approxRow, approxRow + 1, approxRow - 1]; // 軽微なズレ吸収
+        for (const r of candidates) {
+          if (r < 1) continue;
+          const val = ws.getCell(`${DESC_COL_START}${r}`).value;
+          const txt = cellToPlainText(val);
+          if (txt) { caption = txt; break; }
+        }
+        // 近傍で見つからない場合、下方向へ広めに走査（マージ範囲のトップ行特定のため）
+        if (!caption) {
+          for (let r = approxRow; r < approxRow + 11; r++) {
+            const val = ws.getCell(`${DESC_COL_START}${r}`).value;
+            const txt = cellToPlainText(val);
+            if (txt) { caption = txt; break; }
+          }
+        }
+    
+        // DataURLへ変換
         const dataUrl = bufferToDataUrl(img.buffer, img.extension);
         model.photos.push({ dataUrl, name: '', caption });
       }
@@ -203,3 +243,4 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
+
