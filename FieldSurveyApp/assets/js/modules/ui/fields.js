@@ -76,13 +76,15 @@ export const FieldRenderers = {
         item.innerHTML = `
           <img src="${p.dataUrl}" alt="photo ${idx + 1}">
           <div class="caption">
-            <input type="text" placeholder="説明（キャプション）" value="${p.caption || ''}" />
+            <textarea placeholder="説明（キャプション）">${p.caption || ''}</textarea>
           </div>
           <div class="footer">
             <span>${p.name || `photo_${idx + 1}.jpg`}</span>
             <button class="remove">削除</button>
           </div>`;
-        item.querySelector('input').addEventListener('input', e => (p.caption = e.target.value || ''));
+        // 改行を含むキャプションを保持
+        const ta = item.querySelector('textarea');
+        ta.addEventListener('input', e => { p.caption = e.target.value; });
         item.querySelector('.remove').addEventListener('click', () => {
           model[key].splice(idx, 1);
           renderPhotoList();
@@ -113,3 +115,4 @@ export function renderField(container, model, field, fid) {
   if (!fn) return;
   fn(container, model, field, fid);
 }
+
