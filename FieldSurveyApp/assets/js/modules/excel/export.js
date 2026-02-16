@@ -154,55 +154,79 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       nextRow = extraStartRow + extraFields.length;
     }
 
-    // 写真セクション（“基本欄追加”と“追加項目”の後ろに1行空けて配置）
-    let startRow = nextRow + 1;
-    const photos = Array.isArray(entry.model.photos) ? entry.model.photos : [];
-    const perRow = 3;
-    const blockRows = 12;
-    const groups = [
-      { imgCols: ['B','C'], descCol: 'D' },
-      { imgCols: ['E','F'], descCol: 'G' },
-      { imgCols: ['H','I'], descCol: 'J' }
-    ];
-    const colPixels = (colIdx) => (ws.getColumn(colIdx+1).width || 10) * 7;
-    const rowPixels = (rowIdx) => (ws.getRow(rowIdx).height || 18) * 1.333;
-
-    for (let i = 0; i < photos.length; i += perRow) {
-      for (let r = startRow; r < startRow + blockRows; r++) ws.getRow(r).height = 18;
-      for (let j = 0; j < perRow; j++) {
-        const p = photos[i + j];
-        if (!p) break;
-        const g = groups[j];
-        const startColIndex  = colLetterToIndex(g.imgCols[0]);
-        const endColIndex    = colLetterToIndex(g.imgCols[1]);
-        const containerW = colPixels(startColIndex) + colPixels(endColIndex);
-        let containerH = 0;
-        for (let rr = startRow; rr < startRow + blockRows; rr++) containerH += rowPixels(rr);
-
-        const { w: imgW, h: imgH } = await getImageDim(p.dataUrl);
-        const ratioW = containerW / imgW;
-        const ratioH = containerH / imgH;
-        const ratio  = Math.min(ratioW, ratioH);
-        const drawW  = Math.max(1, Math.floor(imgW * ratio));
-        const drawH  = Math.max(1, Math.floor(imgH * ratio));
-
-        ws.addImage(
-          wb.addImage({ base64: p.dataUrl.split(',')[1], extension: p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg' }),
-          { tl: { col: startColIndex, row: startRow - 1 }, ext: { width: drawW, height: drawH } }
-        );
-
-        const descRange = `${g.descCol}${startRow}:${g.descCol}${startRow + blockRows - 1}`;
-        ws.mergeCells(descRange);
-        const descCell = ws.getCell(`${g.descCol}${startRow}`);
-        descCell.value     = p.caption || '';
-        descCell.alignment = { wrapText: true, vertical: 'top' };
-        descCell.font      = { name: 'Meiryo UI' };
-        descCell.border    = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
-      }
-      startRow += (blockRows + 1);
+  // 写真セクション（左右分割：左=画像、右=説明。1ページ2枚相当）
+  let startRow = nextRow + 1;
+  const photos = Array.isArray(entry.model.photos) ? entry.model.photos : [];
+  
+  // 左側の画像エリアの列（B〜F）、右側の説明エリアの列（G〜J）
+  const IMAGE_COLS = ['B','C','D','E','F'];
+  const DESC_COL_START = 'G';
+  const DESC_COL_END   = 'J';
+  
+  // 行の高さと、1ブロック（半ページ）あたりの使用行数
+  const ROW_HEIGHT_PT = 24;   // 1行=24pt（見え方に応じて調整可）
+  const BLOCK_ROWS    = 28;   // 画像＋説明で使用する行数（“半ページ”相当）
+  
+  // 列幅→ピクセル、行高(ポイント)→ピクセルの簡易換算
+  const colPixels = (colIdx) => (ws.getColumn(colIdx+1).width || 10) * 7;
+  const rowPixels = (rowIdx) => (ws.getRow(rowIdx).height || 18) * 1.333;
+  const sumColPixels = (letters) =>
+    letters.reduce((sum, L) => sum + colPixels(colLetterToIndex(L)), 0);
+  
+  // 画像領域の横幅（ピクセル）
+  const containerW = sumColPixels(IMAGE_COLS);
+  
+  for (let i = 0; i < photos.length; i++) {
+    const p = photos[i];
+  
+    // ブロックの行高を確保（“半ページ”分の高さを作る）
+    for (let r = startRow; r < startRow + BLOCK_ROWS; r++) {
+      ws.getRow(r).height = ROW_HEIGHT_PT;
     }
+  
+    // 画像領域の高さ（ピクセル）
+    let containerH = 0;
+    for (let rr = startRow; rr < startRow + BLOCK_ROWS; rr++) {
+      containerH += rowPixels(rr);
+    }
+  
+    // 画像実寸からフィットサイズを計算（縦横比維持）
+    const { w: imgW, h: imgH } = await getImageDim(p.dataUrl);
+    const ratioW = containerW / imgW;
+    const ratioH = containerH / imgH;
+    const ratio  = Math.min(ratioW, ratioH);
+    const drawW  = Math.max(1, Math.floor(imgW * ratio));
+    const drawH  = Math.max(1, Math.floor(imgH * ratio));
+  
+    // 左側（B列の位置）に画像を描画
+    ws.addImage(
+      wb.addImage({
+        base64: p.dataUrl.split(',')[1],
+        extension: p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg',
+      }),
+      {
+        tl:  { col: colLetterToIndex(IMAGE_COLS[0]), row: startRow - 1 },
+        ext: { width: drawW, height: drawH },
+      }
+    );
+  
+    // 右側（G〜J列）に説明欄を縦いっぱいで作成
+    const descRange = `${DESC_COL_START}${startRow}:${DESC_COL_END}${startRow + BLOCK_ROWS - 1}`;
+    ws.mergeCells(descRange);
+    const descCell = ws.getCell(`${DESC_COL_START}${startRow}`);
+    descCell.value     = p.caption || '';
+    descCell.alignment = { wrapText: true, vertical: 'top' };
+    descCell.font      = { name: 'Meiryo UI' };
+    descCell.border    = {
+      top:    borderThin,
+      left:   borderThin,
+      bottom: borderThin,
+      right:  borderThin,
+    };
+  
+    // 次の画像ブロックへ（“半ページ”分の高さを使ったのでその分進める）
+    startRow += (BLOCK_ROWS + 2); // +2は余白
   }
-
   for (const e of entries) {
     await addOneEntrySheet(e);
   }
@@ -232,4 +256,5 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
+
 
