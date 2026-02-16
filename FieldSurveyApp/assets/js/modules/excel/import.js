@@ -175,37 +175,32 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
 
     // 画像の取り込み（Excel埋め込み画像を読む）
     // ExcelJSのビルドが getImages / getImage をサポートしている場合のみ動作
+    // 画像の取り込み（Excel埋め込み画像を読む：説明はG列の11行分を結合）
     if (typeof ws.getImages === 'function' && typeof wb.getImage === 'function') {
       const images = ws.getImages();
+      const DESC_COL = 'G';
+      const ROWS_PER_CAPTION = 11;
+    
       for (const meta of images) {
         const img = wb.getImage(meta.imageId);
         if (!img || !img.buffer) continue;
     
-        // 画像の左上行（0始まり）→ 1始まりへ（切り上げだとズレやすいので floor を使用）
+        // export側で tl.row は 0始まりで startRow-1 を指定しているため、floor+1 で開始行を復元
         const approxRow = Math.floor((meta.tl?.row ?? 0) + 1);
     
-        // 説明欄の開始列は export.js の DESC_COL_START と一致させる
-        const DESC_COL_START = 'G';
+        // 設置場所などの上部基本欄（～6行目）を誤検出しないため、説明ブロックの最小開始行を8に制限
+        const startRow = Math.max(8, approxRow);
     
-        // まずは想定行（approxRow）を試し、入っていなければ近傍をスキャンして取得
-        let caption = '';
-        const candidates = [approxRow, approxRow + 1, approxRow - 1]; // 軽微なズレ吸収
-        for (const r of candidates) {
-          if (r < 1) continue;
-          const val = ws.getCell(`${DESC_COL_START}${r}`).value;
-          const txt = cellToPlainText(val);
-          if (txt) { caption = txt; break; }
+        // G列の startRow から 11 行ぶんを文字列化して結合（空行はスキップ）
+        const lines = [];
+        for (let r = startRow; r < startRow + ROWS_PER_CAPTION; r++) {
+          const val = ws.getCell(`${DESC_COL}${r}`).value;
+          const txt = cellToPlainText(val).trim();
+          if (txt) lines.push(txt);
         }
-        // 近傍で見つからない場合、下方向へ広めに走査（マージ範囲のトップ行特定のため）
-        if (!caption) {
-          for (let r = approxRow; r < approxRow + 11; r++) {
-            const val = ws.getCell(`${DESC_COL_START}${r}`).value;
-            const txt = cellToPlainText(val);
-            if (txt) { caption = txt; break; }
-          }
-        }
+        const caption = lines.join('\n');
     
-        // DataURLへ変換
+        // DataURLへ変換して追加
         const dataUrl = bufferToDataUrl(img.buffer, img.extension);
         model.photos.push({ dataUrl, name: '', caption });
       }
@@ -243,4 +238,5 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
+
 
