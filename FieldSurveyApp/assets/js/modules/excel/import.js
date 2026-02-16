@@ -175,33 +175,49 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
 
     // 画像の取り込み（Excel埋め込み画像を読む）
     // ExcelJSのビルドが getImages / getImage をサポートしている場合のみ動作
-    // 画像の取り込み（Excel埋め込み画像を読む：説明はG列の11行分を結合）
+    // 画像の取り込み（Excel埋め込み画像を読む：画像順にG列の説明ブロック11行を対応付け）
     if (typeof ws.getImages === 'function' && typeof wb.getImage === 'function') {
-      const images = ws.getImages();
       const DESC_COL = 'G';
-      const ROWS_PER_CAPTION = 11;
+      const ROWS_PER_CAPTION = 11;     // 説明は11行分
+      const BLOCK_ROWS = 28;           // export側で使った画像＋説明ブロックの総行数
+      const GAP_ROWS = 2;              // ブロック間の余白行数（export側に合わせる）
     
-      for (const meta of images) {
+      // 1) シート上の画像メタを取得し、縦位置でソート（上→下）
+      let images = ws.getImages();
+      images = Array.isArray(images) ? images.slice() : [];
+      images.sort((a, b) => ((a.tl?.row ?? 0) - (b.tl?.row ?? 0)));
+    
+      // 2) 最初の説明ブロックの開始行をG列で検出（基本欄を避けるため最低行=8）
+      const lastRowNum = ws.lastRow?.number || 1000;
+      let firstCaptionStart = null;
+      for (let r = 8; r <= lastRowNum; r++) {
+        const txt = cellToPlainText(ws.getCell(`${DESC_COL}${r}`).value).trim();
+        if (txt) { firstCaptionStart = r; break; }
+      }
+    
+      // 3) 説明ブロックを上から順に抽出して配列化（画像数に合わせて抽出）
+      const captions = [];
+      if (firstCaptionStart != null) {
+        let r0 = firstCaptionStart;
+        for (let i = 0; i < images.length; i++) {
+          const lines = [];
+          let hasText = false;
+          for (let r = r0; r < r0 + ROWS_PER_CAPTION && r <= lastRowNum; r++) {
+            const txt = cellToPlainText(ws.getCell(`${DESC_COL}${r}`).value).trim();
+            if (txt) { lines.push(txt); hasText = true; }
+          }
+          captions.push(hasText ? lines.join('\n') : '');
+          r0 += (BLOCK_ROWS + GAP_ROWS);
+        }
+      }
+    
+      // 4) 画像と説明を画像順で対応付けてmodel.photosへ追加
+      for (let i = 0; i < images.length; i++) {
+        const meta = images[i];
         const img = wb.getImage(meta.imageId);
         if (!img || !img.buffer) continue;
-    
-        // export側で tl.row は 0始まりで startRow-1 を指定しているため、floor+1 で開始行を復元
-        const approxRow = Math.floor((meta.tl?.row ?? 0) + 1);
-    
-        // 設置場所などの上部基本欄（～6行目）を誤検出しないため、説明ブロックの最小開始行を8に制限
-        const startRow = Math.max(8, approxRow);
-    
-        // G列の startRow から 11 行ぶんを文字列化して結合（空行はスキップ）
-        const lines = [];
-        for (let r = startRow; r < startRow + ROWS_PER_CAPTION; r++) {
-          const val = ws.getCell(`${DESC_COL}${r}`).value;
-          const txt = cellToPlainText(val).trim();
-          if (txt) lines.push(txt);
-        }
-        const caption = lines.join('\n');
-    
-        // DataURLへ変換して追加
         const dataUrl = bufferToDataUrl(img.buffer, img.extension);
+        const caption = captions[i] ?? '';
         model.photos.push({ dataUrl, name: '', caption });
       }
     }
@@ -238,5 +254,6 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
+
 
 
