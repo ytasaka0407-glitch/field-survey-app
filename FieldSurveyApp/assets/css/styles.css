@@ -90,6 +90,15 @@ textarea { min-height: 96px; resize: vertical; } /* 高さのみ変更可能（�
 .photo-item .caption input {
   width: 100%; font-size: 13px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
 }
+.photo-item .caption textarea {
+  width: 100%;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-height: 60px;   /* 適宜調整 */
+  resize: vertical;   /* 高さのみ調整可 */
+}
 .photo-item .footer {
   padding: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted);
 }
@@ -174,4 +183,5 @@ input::placeholder, textarea::placeholder {
   color: #064e3b;           /* 読みやすい濃い緑の文字色 */
 }
 .btn.mint:hover { filter: brightness(0.96); }
+
 .btn.mint:active { transform: scale(0.98); }
