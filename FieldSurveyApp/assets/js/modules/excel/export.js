@@ -165,7 +165,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     
     // 行の高さと、1ブロック（半ページ）あたりの使用行数
     const ROW_HEIGHT_PT = 24;   // 1行=24pt（見え方に応じて調整可）
-    const BLOCK_ROWS    = 28;   // 画像＋説明で使用する行数（“半ページ”相当）
+    const BLOCK_ROWS    = 11;   // 画像＋説明で使用する行数（“半ページ”相当）
     
     // 列幅→ピクセル、行高(ポイント)→ピクセルの簡易換算
     const colPixels = (colIdx) => (ws.getColumn(colIdx+1).width || 10) * 7;
@@ -257,6 +257,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
+
 
 
 
