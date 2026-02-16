@@ -214,7 +214,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       const descRange = `${DESC_COL_START}${startRow}:${DESC_COL_END}${startRow + BLOCK_ROWS - 1}`;
       ws.mergeCells(descRange);
       const descCell = ws.getCell(`${DESC_COL_START}${startRow}`);
-      descCell.value     = p.caption || '';
+      descCell.value = (p.caption || '').replace(/\r\n?/g, '\n');
       descCell.alignment = { wrapText: true, vertical: 'top' };
       descCell.font      = { name: 'Meiryo UI' };
       descCell.border    = {
@@ -257,6 +257,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
+
 
 
 
