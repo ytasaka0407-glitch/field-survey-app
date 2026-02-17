@@ -76,7 +76,7 @@ export const FieldRenderers = {
         item.innerHTML = `
           <img src="${p.dataUrl}" alt="photo ${idx + 1}">
           <div class="caption">
-            <textarea placeholder="説明（キャプション）">${p.caption || ''}</textarea>
+            <textarea placeholder="画像の説明を入力">${p.caption || ''}</textarea>
           </div>
           <div class="footer">
             <span>${p.name || `photo_${idx + 1}.jpg`}</span>
@@ -115,4 +115,5 @@ export function renderField(container, model, field, fid) {
   if (!fn) return;
   fn(container, model, field, fid);
 }
+
 
