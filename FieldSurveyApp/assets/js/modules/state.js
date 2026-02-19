@@ -16,8 +16,10 @@ export function initDefaults() {
         date: "",
         location: "",
         method: "",
-        isReuse: false,           // 既設流用なら true / 新設なら false
-        diagramOK: true,          // 整合性OKなら true / NGなら false
+        // 新設/既設（'new' or 'reuse'）
+        installType: "new",
+        // 系統図整合（'ok' or 'ng'）
+        diagramStatus: "ok",
         diagramNgReason: "",
         details: "",
         photos: [],
@@ -37,8 +39,8 @@ export function ensureSingle(cat, projectDate) {
       date: projectDate || "",
       location: "",
       method: "",
-      isReuse: false,
-      diagramOK: true,
+      installType: "new",
+      diagramStatus: "ok",
       diagramNgReason: "",
       details: "",
       photos: [],
@@ -48,14 +50,22 @@ export function ensureSingle(cat, projectDate) {
     cur.date = cur.date || projectDate || "";
     cur.location = cur.location || "";
     cur.method = cur.method || "";
-    if (typeof cur.isReuse !== 'boolean') cur.isReuse = false;
-    if (typeof cur.diagramOK !== 'boolean') cur.diagramOK = true;
+    // 旧フィールドの後方互換
+    if (typeof cur.isReuse === 'boolean' && !cur.installType) {
+      cur.installType = cur.isReuse ? "reuse" : "new";
+    }
+    if (typeof cur.diagramOK === 'boolean' && !cur.diagramStatus) {
+      cur.diagramStatus = cur.diagramOK ? "ok" : "ng";
+    }
+    cur.installType = cur.installType || "new";
+    cur.diagramStatus = cur.diagramStatus || "ok";
     cur.diagramNgReason = cur.diagramNgReason || "";
     cur.details = cur.details || "";
     cur.photos = Array.isArray(cur.photos) ? cur.photos : [];
   }
   return dataMap[cat];
 }
+
 export function ensureMulti(cat, projectDate) {
   const cur = dataMap[cat];
   if (!cur || cur.mode !== "multi") {
@@ -69,16 +79,30 @@ export function ensureMulti(cat, projectDate) {
         date: projectDate || "",
         location: "",
         method: "",
-        isReuse: false,
-        diagramOK: true,
+        installType: "new",
+        diagramStatus: "ok",
         diagramNgReason: "",
         details: "",
         photos: [],
       };
+    } else {
+      const v = dataMap[cat].stationData[st.id];
+      // 旧フィールドの後方互換
+      if (typeof v.isReuse === 'boolean' && !v.installType) {
+        v.installType = v.isReuse ? "reuse" : "new";
+      }
+      if (typeof v.diagramOK === 'boolean' && !v.diagramStatus) {
+        v.diagramStatus = v.diagramOK ? "ok" : "ng";
+      }
+      v.installType = v.installType || "new";
+      v.diagramStatus = v.diagramStatus || "ok";
+      v.diagramNgReason = v.diagramNgReason || "";
+      v.photos = Array.isArray(v.photos) ? v.photos : [];
     }
   });
   return dataMap[cat];
 }
+
 export function getOrInitStationData(cat, stationId, projectDate) {
   const v = ensureMulti(cat, projectDate);
   if (!v.stationData[stationId]) {
@@ -86,12 +110,20 @@ export function getOrInitStationData(cat, stationId, projectDate) {
       date: projectDate || "",
       location: "",
       method: "",
-      isReuse: false,
-      diagramOK: true,
+      installType: "new",
+      diagramStatus: "ok",
       diagramNgReason: "",
       details: "",
       photos: [],
     };
+  } else {
+    const s = v.stationData[stationId];
+    if (typeof s.isReuse === 'boolean' && !s.installType) s.installType = s.isReuse ? "reuse" : "new";
+    if (typeof s.diagramOK === 'boolean' && !s.diagramStatus) s.diagramStatus = s.diagramOK ? "ok" : "ng";
+    s.installType = s.installType || "new";
+    s.diagramStatus = s.diagramStatus || "ok";
+    s.diagramNgReason = s.diagramNgReason || "";
+    s.photos = Array.isArray(s.photos) ? s.photos : [];
   }
   return v.stationData[stationId];
 }
@@ -108,3 +140,4 @@ export function removeSharedStationById(stationId) {
   });
 }
 export function setProjectDatePrev(v) { projectDatePrev = v || ""; }
+
