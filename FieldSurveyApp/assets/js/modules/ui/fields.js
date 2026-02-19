@@ -1,10 +1,17 @@
 // FieldSurveyApp/assets/js/modules/ui/fields.js
 import { readFileAsDataURL, resizeImage } from '../utils.js';
 
+function setNgReasonVisibility(container, model) {
+  const el = container.querySelector('[data-field-key="diagramNgReason"]');
+  if (el) {
+    el.style.display = model.diagramOK === false ? '' : 'none';
+  }
+}
+
 export const FieldRenderers = {
   date: (container, model, field, fid) => {
     container.insertAdjacentHTML('beforeend', `
-      <div class="form-row">
+      <div class="form-row" data-field-key="${field.key}">
         <label for="${fid}">${field.label}</label>
         <input id="${fid}" type="date" value="${model[field.key] || ''}" />
       </div>`);
@@ -14,7 +21,7 @@ export const FieldRenderers = {
 
   text: (container, model, field, fid) => {
     container.insertAdjacentHTML('beforeend', `
-      <div class="form-row">
+      <div class="form-row" data-field-key="${field.key}">
         <label for="${fid}">${field.label}</label>
         <input id="${fid}" type="text" placeholder="${field.placeholder || ''}" value="${model[field.key] || ''}" />
       </div>`);
@@ -24,7 +31,7 @@ export const FieldRenderers = {
 
   number: (container, model, field, fid) => {
     container.insertAdjacentHTML('beforeend', `
-      <div class="form-row">
+      <div class="form-row" data-field-key="${field.key}">
         <label for="${fid}">${field.label}</label>
         <input id="${fid}" type="number" step="any" value="${model[field.key] ?? ''}" />
       </div>`);
@@ -34,7 +41,7 @@ export const FieldRenderers = {
 
   textarea: (container, model, field, fid) => {
     container.insertAdjacentHTML('beforeend', `
-      <div class="form-row">
+      <div class="form-row" data-field-key="${field.key}">
         <label for="${fid}">${field.label}</label>
         <textarea id="${fid}" placeholder="${field.placeholder || ''}">${model[field.key] || ''}</textarea>
       </div>`);
@@ -42,12 +49,29 @@ export const FieldRenderers = {
       .addEventListener('input', e => (model[field.key] = e.target.value));
   },
 
+  checkbox: (container, model, field, fid) => {
+    const checked = !!model[field.key];
+    container.insertAdjacentHTML('beforeend', `
+      <div class="form-row" data-field-key="${field.key}">
+        <label for="${fid}">${field.label}</label>
+        <input id="${fid}" type="checkbox" ${checked ? 'checked' : ''} />
+      </div>`);
+    const inputEl = container.querySelector(`#${fid}`);
+    inputEl.addEventListener('change', e => {
+      model[field.key] = !!e.target.checked;
+      // 「系統図との整合性」チェックに連動して NG理由の表示切替
+      if (field.key === 'diagramOK') {
+        setNgReasonVisibility(container, model);
+      }
+    });
+  },
+
   photos: (container, model, field, fidBase) => {
     const key = field.key;
     if (!Array.isArray(model[key])) model[key] = [];
 
     container.insertAdjacentHTML('beforeend', `
-      <div class="form-row">
+      <div class="form-row" data-field-key="${field.key}">
         <label>${field.label}</label>
         <div>
           <div class="buttons">
@@ -79,10 +103,9 @@ export const FieldRenderers = {
             <textarea placeholder="画像の説明を入力">${p.caption || ''}</textarea>
           </div>
           <div class="footer">
-            <span>${p.name || `photo_${idx + 1}.jpg`}</span>
+            <span>${p.name || \`photo_\${idx + 1}.jpg\`}</span>
             <button class="remove">削除</button>
           </div>`;
-        // 改行を含むキャプションを保持
         const ta = item.querySelector('textarea');
         ta.addEventListener('input', e => { p.caption = e.target.value; });
         item.querySelector('.remove').addEventListener('click', () => {
@@ -114,6 +137,8 @@ export function renderField(container, model, field, fid) {
   const fn = FieldRenderers[field.type];
   if (!fn) return;
   fn(container, model, field, fid);
+  // 初期表示時の NG理由の表示制御
+  if (field.key === 'diagramOK' || field.key === 'diagramNgReason') {
+    setNgReasonVisibility(container, model);
+  }
 }
-
-
