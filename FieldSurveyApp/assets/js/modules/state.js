@@ -10,7 +10,19 @@ export let projectDatePrev = "";
 
 export function initDefaults() {
   defaultSingleCategories.forEach((c) => {
-    if (!dataMap[c]) dataMap[c] = { mode: "single", date: "", location: "", details: "", photos: [] };
+    if (!dataMap[c]) {
+      dataMap[c] = {
+        mode: "single",
+        date: "",
+        location: "",
+        method: "",
+        isReuse: false,           // 既設流用なら true / 新設なら false
+        diagramOK: true,          // 整合性OKなら true / NGなら false
+        diagramNgReason: "",
+        details: "",
+        photos: [],
+      };
+    }
   });
   defaultMultiCategories.forEach((c) => {
     if (!dataMap[c]) dataMap[c] = { mode: "multi", stationData: {} };
@@ -20,11 +32,25 @@ export function initDefaults() {
 export function ensureSingle(cat, projectDate) {
   const cur = dataMap[cat];
   if (!cur) {
-    dataMap[cat] = { mode: "single", date: projectDate || "", location: "", details: "", photos: [] };
+    dataMap[cat] = {
+      mode: "single",
+      date: projectDate || "",
+      location: "",
+      method: "",
+      isReuse: false,
+      diagramOK: true,
+      diagramNgReason: "",
+      details: "",
+      photos: [],
+    };
   } else if (cur.mode === undefined) {
     cur.mode = "single";
     cur.date = cur.date || projectDate || "";
     cur.location = cur.location || "";
+    cur.method = cur.method || "";
+    if (typeof cur.isReuse !== 'boolean') cur.isReuse = false;
+    if (typeof cur.diagramOK !== 'boolean') cur.diagramOK = true;
+    cur.diagramNgReason = cur.diagramNgReason || "";
     cur.details = cur.details || "";
     cur.photos = Array.isArray(cur.photos) ? cur.photos : [];
   }
@@ -42,6 +68,10 @@ export function ensureMulti(cat, projectDate) {
       dataMap[cat].stationData[st.id] = {
         date: projectDate || "",
         location: "",
+        method: "",
+        isReuse: false,
+        diagramOK: true,
+        diagramNgReason: "",
         details: "",
         photos: [],
       };
@@ -55,6 +85,10 @@ export function getOrInitStationData(cat, stationId, projectDate) {
     v.stationData[stationId] = {
       date: projectDate || "",
       location: "",
+      method: "",
+      isReuse: false,
+      diagramOK: true,
+      diagramNgReason: "",
       details: "",
       photos: [],
     };
