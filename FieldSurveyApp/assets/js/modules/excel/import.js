@@ -10,6 +10,7 @@ import {
 import { toInputDateString, stationIdFromName } from '../utils.js';
 import { getSchemaFor } from '../ui/schemas.js';
 
+// 画面の基本欄として取り込むラベルとキー
 const CORE_EXTRA_FIELDS = [
   { key: 'installType',     label: '新設/既設流用' },
   { key: 'method',          label: '設置方法' },
@@ -28,6 +29,7 @@ function cellToPlainText(val) {
   try { return String(val); } catch { return ''; }
 }
 
+// 画像Buffer → DataURL（フォールバック用）
 function bufferToDataUrl(buffer, extension) {
   const mime = extension === 'png' ? 'image/png' : 'image/jpeg';
   const u8 = (buffer instanceof Uint8Array) ? buffer : new Uint8Array(buffer);
@@ -245,61 +247,56 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     // 写真の取り込み（優先順: PHOTOS新方式 → PHOTOS旧方式 → フォールバック）
     let sheetPhotosApplied = false;
 
-    // PHOTOS（新方式）：imgRowStart の G列（先頭行）だけを読み取り。写真ごとに独立してキャプション決定
+    // PHOTOS（新方式）：G{imgRowStart} を一括読込して row→caption マップ化し、写真ごとに独立して決定
     if (photosBySheet.has(sheetName)) {
       const allRecs = photosBySheet.get(sheetName);
-      // このシート・カテゴリ（および局名）に属するレコードだけに絞る
       const recs = allRecs.filter(rec =>
         rec.type === (isMulti ? 'multi' : 'single') &&
         rec.category === catName &&
         (isMulti ? (rec.station === (stationName || '')) : true)
       );
-    
+
       if (recs.length) {
-        // 1) 説明セルの先頭行（imgRowStart）のユニーク集合を作成
         const uniqueRows = Array.from(
           new Set(
             recs.map(r => Number(r.imgRowStart || 0)).filter(n => Number.isFinite(n) && n > 0)
           )
         );
-    
-        // 2) 行→キャプションのマップを一括で構築（G列のみ参照）
+
         const captionByRow = new Map();
         for (const row of uniqueRows) {
           const v = ws.getCell(`G${row}`).value;
           const t = cellToPlainText(v).trim();
           captionByRow.set(row, t ? t.replace(/\r\n?/g, '\n') : '');
         }
-    
-        // 3) 各写真を独立に決定（rowごとに引き当て。空ならPHOTOSのcaptionを採用）
+
         for (const rec of recs) {
           const row = Number(rec.imgRowStart || 0);
           let caption = '';
-    
+
           if (row > 0 && captionByRow.has(row) && captionByRow.get(row)) {
             caption = captionByRow.get(row);
           } else {
-            // シート上が空の場合は PHOTOS の caption を初期値として採用
             caption = rec.caption || '';
           }
-    
+
           // NG理由との取り違え安全弁：完全一致ならPHOTOSのcaptionを優先
           if (caption && model.diagramNgReason && caption === model.diagramNgReason && rec.caption) {
             caption = rec.caption;
           }
-    
+
           model.photos.push({
             dataUrl: rec.dataUrl || '',
             name: rec.name || '',
             caption
           });
         }
-    
+
         sheetPhotosApplied = model.photos.length > 0;
       }
     }
 
-    // PHOTOS（旧方式）：カテゴリ/局名キーで復元
+    // PHOTOS（旧方式）
     if (!sheetPhotosApplied && photosByCatStation.size) {
       const key = `${isMulti ? 'multi' : 'single'}|${catName}|${isMulti ? (stationName || '') : ''}`;
       const list = photosByCatStation.get(key);
@@ -343,7 +340,6 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         }
 
         let caption = '';
-        // フォールバックでは範囲スキャン（最初の非空）
         for (let r = start; r <= end; r++) {
           const bCell = ws.getCell(`B${r}`);
           if (bCell && bCell.isMerged) continue;
@@ -359,4 +355,3 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
-
