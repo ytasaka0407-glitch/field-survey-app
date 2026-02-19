@@ -71,6 +71,12 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
   const colLetterToIndex = (L) => L.charCodeAt(0) - 65;
 
+  function applyBottomBorderRange(ws, startCol, endCol, row) {
+    for (let c = startCol; c <= endCol; c++) {
+      ws.getCell(row, c).border = { bottom: borderThin };
+    }
+  }
+
   async function addOneEntrySheet(entry) {
     const ws = wb.addWorksheet(entry.sheetName, {
       pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
@@ -78,6 +84,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     });
     ws.views = [{ showGridLines: false }];
 
+    // 列幅（A列を広くする）
     const colWidths = [20, 16, 16, 18, 16, 16, 18, 16, 16, 18, 10, 10]; // A〜L
     colWidths.forEach((w, i) => ws.getColumn(i+1).width = w);
     ws.getColumn(11).hidden = true; // K列（フィールドキー格納）
@@ -99,6 +106,13 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.mergeCells('B4:J4'); ws.getCell('B4').value = entry.model.location || '-';
     ws.getCell('B4').font  = { name: 'Meiryo UI' };
 
+    // 罫線（上段の区切り）
+    applyBottomBorderRange(ws, 1, 1, 3);  // A3
+    applyBottomBorderRange(ws, 2, 2, 3);  // B3
+    applyBottomBorderRange(ws, 1, 1, 4);  // A4
+    // B4 は結合セル（B〜J）なので全範囲に引く
+    applyBottomBorderRange(ws, 2, 10, 4);
+
     // 以降の基本項目
     let nextRow = 5;
 
@@ -117,11 +131,11 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       ws.mergeCells(`B${nextRow}:J${nextRow}`);
       ws.getCell(`B${nextRow}`).value = (entry.model.method ?? '').toString() || '-';
       ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
-    
-      // ↓ 追加：設置方法の行の下に罫線
-      ws.getCell(`A${nextRow}`).border = { bottom: borderThin };
-      ws.getCell(`B${nextRow}`).border = { bottom: borderThin };
-    
+
+      // 設置方法の行の下に罫線（A列とB〜J 全範囲）
+      applyBottomBorderRange(ws, 1, 1, nextRow);
+      applyBottomBorderRange(ws, 2, 10, nextRow);
+
       nextRow++;
     }
 
@@ -141,11 +155,11 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       ws.getCell(`B${nextRow}`).value = (entry.model.diagramNgReason ?? '').toString() || '-';
       ws.getCell(`B${nextRow}`).alignment = { wrapText: true, vertical: 'top' };
       ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
-    
-      // ↓ 追加：NG理由の行の下に罫線
-      ws.getCell(`A${nextRow}`).border = { bottom: borderThin };
-      ws.getCell(`B${nextRow}`).border = { bottom: borderThin };
-    
+
+      // NG理由の行の下に罫線（A列とB〜J 全範囲）
+      applyBottomBorderRange(ws, 1, 1, nextRow);
+      applyBottomBorderRange(ws, 2, 10, nextRow);
+
       nextRow++;
     }
 
@@ -158,11 +172,10 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.getCell(`B${nextRow}`).font      = { name: 'Meiryo UI' };
     ws.getRow(nextRow).height = 22;
     ws.getRow(nextRow+1).height = 22;
+    // その他調査内容ブロックの下に罫線
+    applyBottomBorderRange(ws, 1, 1, nextRow + 1);
+    applyBottomBorderRange(ws, 2, 10, nextRow + 1);
     nextRow += 2;
-
-    // 区切り線（任意）
-    ['A3','A4',`A${nextRow-2}`].forEach(addr => ws.getCell(addr).border = { bottom: borderThin });
-    ['B3','B4',`B${nextRow-2}`].forEach(addr => ws.getCell(addr).border = { bottom: borderThin });
 
     // 追加項目（スキーマ定義に基づく。コア扱いのキーは除外）
     const schema = getSchemaFor(entry.cat, entry.type === 'multi' ? 'multi' : 'single');
@@ -199,8 +212,8 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
     const ROW_HEIGHT_PT = 24;
     const BLOCK_ROWS    = 11;
+    const GAP_ROWS      = 2;
 
-    const colLetterToIndex = (L) => L.charCodeAt(0) - 65;
     const colPixels = (colIdx) => (ws.getColumn(colIdx+1).width || 10) * 7;
     const rowPixels = (rowIdx) => (ws.getRow(rowIdx).height || 18) * 1.333;
     const sumColPixels = (letters) =>
@@ -251,7 +264,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
         right:  borderThin,
       };
 
-      startRow += (BLOCK_ROWS + 2);
+      startRow += (BLOCK_ROWS + GAP_ROWS);
     }
   }
 
@@ -270,6 +283,34 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     tocRow++;
   }
 
+  // PHOTOS シートの書き出し（インポート安定化用、隠しシート）
+  const wsPhotos = wb.addWorksheet('PHOTOS');
+  wsPhotos.getColumn(1).width = 12; // type
+  wsPhotos.getColumn(2).width = 40; // category
+  wsPhotos.getColumn(3).width = 28; // station
+  wsPhotos.getColumn(4).width = 32; // fileName
+  wsPhotos.getColumn(5).width = 60; // caption
+  wsPhotos.getColumn(6).width = 18; // dataUrl（幅は参考）
+  wsPhotos.getRow(1).values = ['type','category','station','fileName','caption','dataUrl'];
+
+  let pr = 2;
+  for (const e of entries) {
+    const type = e.type; // 'single'|'multi'
+    const category = e.cat;
+    const station  = e.type === 'multi' ? (e.stationName || '') : '';
+    const photos = Array.isArray(e.model.photos) ? e.model.photos : [];
+    for (let i = 0; i < photos.length; i++) {
+      const p = photos[i];
+      const fileName = p.name || `photo_${i + 1}.jpg`;
+      const caption  = (p.caption || '').toString();
+      const dataUrl  = p.dataUrl || '';
+      wsPhotos.getRow(pr).values = [type, category, station, fileName, caption, dataUrl];
+      pr++;
+    }
+  }
+  wsPhotos.state = 'hidden';
+
+  // 保存
   const buf = await wb.xlsx.writeBuffer();
   const title = (projectTitle || '').trim();
   const suffix = '現地調査レポート';
@@ -278,4 +319,3 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
-
