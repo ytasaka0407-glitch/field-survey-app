@@ -4,8 +4,14 @@ export const baseSingleSchema = [
   { key: 'date', type: 'date', label: '調査日', required: true },
   { key: 'location', type: 'text', label: '設置場所', placeholder: '設置する箇所をなるべく詳細に記載' },
   { key: 'method', type: 'text', label: '設置方法', placeholder: '設置方法を記載　例)既設位置に入替など' },
-  { key: 'isReuse', type: 'checkbox', label: '新設/既設流用（既設流用ならチェック）' },
-  { key: 'diagramOK', type: 'checkbox', label: '系統図との整合性（OKならチェック）' },
+  { key: 'installType', type: 'radio', label: '新設/既設流用', options: [
+    { value: 'new',   label: '新設' },
+    { value: 'reuse', label: '既設流用' },
+  ]},
+  { key: 'diagramStatus', type: 'radio', label: '系統図との整合性', options: [
+    { value: 'ok', label: 'OK' },
+    { value: 'ng', label: 'NG' },
+  ]},
   { key: 'diagramNgReason', type: 'textarea', label: 'NG理由', placeholder: 'NGの理由を記載' },
   { key: 'details', type: 'textarea', label: 'その他調査内容', placeholder: '現地での調査事項、寸法、注意点など' },
   { key: 'photos', type: 'photos', label: '写真' },
@@ -15,8 +21,14 @@ export const baseMultiSchema = [
   { key: 'date', type: 'date', label: '調査日', required: true },
   { key: 'location', type: 'text', label: '設置場所', placeholder: '設置する箇所をなるべく詳細に記載' },
   { key: 'method', type: 'text', label: '設置方法', placeholder: '設置方法を記載　例)既設位置に入替など' },
-  { key: 'isReuse', type: 'checkbox', label: '新設/既設流用（既設流用ならチェック）' },
-  { key: 'diagramOK', type: 'checkbox', label: '系統図との整合性（OKならチェック）' },
+  { key: 'installType', type: 'radio', label: '新設/既設流用', options: [
+    { value: 'new',   label: '新設' },
+    { value: 'reuse', label: '既設流用' },
+  ]},
+  { key: 'diagramStatus', type: 'radio', label: '系統図との整合性', options: [
+    { value: 'ok', label: 'OK' },
+    { value: 'ng', label: 'NG' },
+  ]},
   { key: 'diagramNgReason', type: 'textarea', label: 'NG理由', placeholder: 'NGの理由を記載' },
   { key: 'details', type: 'textarea', label: 'その他調査内容', placeholder: '現地での調査事項、寸法、注意点など' },
   { key: 'photos', type: 'photos', label: '写真' },
@@ -34,3 +46,4 @@ export function getSchemaFor(cat, mode) {
   if (override && Array.isArray(override)) return override;
   return mode === 'multi' ? baseMultiSchema : baseSingleSchema;
 }
+
