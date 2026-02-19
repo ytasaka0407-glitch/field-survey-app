@@ -50,49 +50,73 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   wsToc.getCell('A1').value = '目次';
   wsToc.getCell('A1').style = sectionTitleStyle;
 
-  // 選択カテゴリからエントリ生成
+  // エントリ生成（並び: 1) 指令センター項目(単一)若番順 → 2) 基地局ごとに若番順）
   const cats = [...selectedCategories];
   const selectedSingles = cats.filter(c => (dataMap[c]?.mode || 'single') === 'single');
   const selectedMultis  = cats.filter(c => (dataMap[c]?.mode) === 'multi');
 
-  const entries = [];
-  for (const cat of selectedSingles) {
-    const v = ensureSingle(cat, projectDateStr);
-    entries.push({ type: 'single', cat, stationId: null, stationName: null, displayLabel: cat, model: v });
-  }
-  for (const cat of selectedMultis) {
-    const mv = ensureMulti(cat, projectDateStr);
-    const stationList = sharedStations.length ? sharedStations.slice() : Object.keys(mv.stationData || {}).map(id => ({ id, name: id }));
-    for (const st of stationList) {
-      const stData = getOrInitStationData(cat, st.id, projectDateStr);
-      entries.push({ type: 'multi', cat, stationId: st.id, stationName: st.name, displayLabel: `${cat}（${st.name}）`, model: stData });
-    }
-  }
-
-  // 若番順（先頭の「NN.」数値で昇順）→ 同値はカテゴリ名の五十音 → マルチは基地局の並び
-  const stationOrder = new Map(sharedStations.map((s, i) => [s.id, i]));
   const leadingNum = (name) => {
     const m = /^(\d+)\./.exec(name || '');
     return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
   };
-  entries.sort((a, b) => {
-    const na = leadingNum(a.cat);
-    const nb = leadingNum(b.cat);
+
+  const singleEntries = [];
+  for (const cat of selectedSingles) {
+    const v = ensureSingle(cat, projectDateStr);
+    singleEntries.push({ type: 'single', cat, stationId: null, stationName: null, displayLabel: cat, model: v });
+  }
+  // 単一カテゴリは若番順 → 同値はカテゴリ名
+  singleEntries.sort((a, b) => {
+    const na = leadingNum(a.cat), nb = leadingNum(b.cat);
     if (na !== nb) return na - nb;
-    const byName = a.cat.localeCompare(b.cat, 'ja');
-    if (byName !== 0) return byName;
-    // 同じカテゴリ内の並び（single優先 → multi、その後基地局順）
-    if (a.type !== b.type) return a.type === 'single' ? -1 : 1;
-    if (a.type === 'multi' && b.type === 'multi') {
-      const ia = stationOrder.has(a.stationId) ? stationOrder.get(a.stationId) : 1e9;
-      const ib = stationOrder.has(b.stationId) ? stationOrder.get(b.stationId) : 1e9;
-      if (ia !== ib) return ia - ib;
-      return (a.stationName || '').localeCompare(b.stationName || '', 'ja');
-    }
-    return 0;
+    return a.cat.localeCompare(b.cat, 'ja');
   });
 
-  // シート名をユニークに生成（ソート後に実施）
+  // マルチカテゴリ：基地局ごとに並べる
+  // 基地局の順序は sharedStations の配列順を優先。空なら、選択されたマルチカテゴリに出現する stationId の和集合を名前でソート。
+  let stationLoop = [];
+  if (Array.isArray(sharedStations) && sharedStations.length) {
+    stationLoop = sharedStations.map(s => ({ id: s.id, name: s.name }));
+  } else {
+    const stationIdSet = new Map(); // id -> name（判明すれば）
+    for (const cat of selectedMultis) {
+      const mv = ensureMulti(cat, projectDateStr);
+      const sd = mv.stationData || {};
+      Object.keys(sd).forEach(id => {
+        if (!stationIdSet.has(id)) stationIdSet.set(id, id);
+      });
+    }
+    stationLoop = Array.from(stationIdSet.entries()).map(([id, name]) => ({ id, name }));
+    stationLoop.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  }
+
+  // マルチカテゴリの若番順リスト（カテゴリ名の先頭番号でソート）
+  const multiCatsSorted = selectedMultis.slice().sort((a, b) => {
+    const na = leadingNum(a), nb = leadingNum(b);
+    if (na !== nb) return na - nb;
+    return a.localeCompare(b, 'ja');
+  });
+
+  const multiEntries = [];
+  for (const st of stationLoop) {
+    for (const cat of multiCatsSorted) {
+      const mv = ensureMulti(cat, projectDateStr);
+      const stData = getOrInitStationData(cat, st.id, projectDateStr);
+      multiEntries.push({
+        type: 'multi',
+        cat,
+        stationId: st.id,
+        stationName: st.name,
+        displayLabel: `${cat}（${st.name}）`,
+        model: stData
+      });
+    }
+  }
+
+  // 最終エントリ順: 単一 → 基地局ごとにマルチ
+  const entries = [...singleEntries, ...multiEntries];
+
+  // シート名をユニークに生成（生成順にシート追加していく）
   const usedNames = new Set();
   for (const e of entries) {
     const base = e.type === 'single' ? sanitizeSheetName(e.cat) : sanitizeSheetName(`${e.cat} - ${e.stationName}`);
@@ -320,12 +344,12 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     }
   }
 
-  // カテゴリシートを若番順に追加
+  // シート追加（単一→基地局ごとマルチの順番で）
   for (const e of entries) {
     await addOneEntrySheet(e);
   }
 
-  // 目次（若番順で作成）
+  // 目次（同じ順番で）
   let tocRow = 3;
   for (const e of entries) {
     wsToc.getCell(`A${tocRow}`).value = { text: e.displayLabel, hyperlink: `#'${e.sheetName}'!A1` };
