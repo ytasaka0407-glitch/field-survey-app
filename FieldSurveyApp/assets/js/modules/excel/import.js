@@ -4,10 +4,10 @@ import { toInputDateString, stationIdFromName } from '../utils.js';
 import { getSchemaFor } from '../ui/schemas.js';
 
 const CORE_EXTRA_FIELDS = [
-  { key: 'method',           label: '設置方法',            singleOnly: true },
-  { key: 'isReuse',          label: '新設/既設流用' },
-  { key: 'diagramOK',        label: '系統図との整合性' },
-  { key: 'diagramNgReason',  label: 'NG理由' },
+  { key: 'method',          label: '設置方法',           singleOnly: false },
+  { key: 'installType',     label: '新設/既設流用' },
+  { key: 'diagramStatus',   label: '系統図との整合性' },
+  { key: 'diagramNgReason', label: 'NG理由' },
 ];
 
 function cellToPlainText(val) {
@@ -115,14 +115,15 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       for (const f of CORE_EXTRA_FIELDS) {
         if (f.singleOnly && isMulti) continue;
         if (aText === (f.label || f.key)) {
-          if (f.key === 'isReuse') {
-            model.isReuse = /既設/.test(valStr);
-          } else if (f.key === 'diagramOK') {
-            model.diagramOK = !/NG/i.test(valStr);
+          const valStr = (v ?? '').toString().trim();
+          if (f.key === 'installType') {
+            model.installType = /既設/.test(valStr) ? 'reuse' : 'new';
+          } else if (f.key === 'diagramStatus') {
+            model.diagramStatus = /NG/i.test(valStr) ? 'ng' : 'ok';
           } else if (f.key === 'diagramNgReason') {
             model.diagramNgReason = valStr;
-          } else {
-            model[f.key] = valStr;
+          } else if (f.key === 'method') {
+            model.method = valStr;
           }
           break;
         }
@@ -139,7 +140,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     if (extraHeaderRow != null) {
       let row = extraHeaderRow + 1;
       let emptyCount = 0;
-      const FORBIDDEN_KEYS = new Set(['date','location','details','photos','method','isReuse','diagramOK','diagramNgReason']);
+      const FORBIDDEN_KEYS = new Set(['date','location','details','photos','method','installType','diagramStatus','diagramNgReason']);
       while (row < extraHeaderRow + 1 + 200) {
         const labelCell = ws.getCell(`A${row}`);
         const valueCell = ws.getCell(`B${row}`);
@@ -238,3 +239,4 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
+
