@@ -103,7 +103,7 @@ export const FieldRenderers = {
             <textarea placeholder="画像の説明を入力">${p.caption || ''}</textarea>
           </div>
           <div class="footer">
-            <span>${p.name || \`photo_\${idx + 1}.jpg\`}</span>
+            <span>${p.name || ('photo_' + (idx + 1) + '.jpg')}</span>
             <button class="remove">削除</button>
           </div>`;
         const ta = item.querySelector('textarea');
@@ -142,3 +142,4 @@ export function renderField(container, model, field, fid) {
     setNgReasonVisibility(container, model);
   }
 }
+
