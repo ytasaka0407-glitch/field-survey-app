@@ -1,11 +1,11 @@
 // FieldSurveyApp/assets/js/modules/ui/blocks.js
-import { dataMap, selectedCategories, ensureSingle, ensureMulti, getOrInitStationData } from '../state.js';
+import { dataMap, selectedCategories, ensureSingle, ensureMulti, getOrInitStationData, sharedStations } from '../state.js';
 import { escapeHtml, hashId } from '../utils.js';
 import { getSchemaFor } from './schemas.js';
 import { renderField } from './fields.js';
 
 export function initBlocksUI(refs) {
-  const { singleCatsContainer, multiStationsContainer, projectDateEl, sharedStations } = refs;
+  const { singleCatsContainer, multiStationsContainer, projectDateEl } = refs;
 
   function buildSingleCategoryBlock(cat) {
     const v = ensureSingle(cat, projectDateEl.value || '');
@@ -14,7 +14,7 @@ export function initBlocksUI(refs) {
     const block = document.createElement('div');
     block.className = 'card';
     const title = document.createElement('h3');
-    title.textContent = escapeHtml(cat);
+    title.textContent = cat; // ← escapeHtmlは不要（textContentは安全）
     block.appendChild(title);
     const inner = document.createElement('div');
     block.appendChild(inner);
@@ -28,6 +28,7 @@ export function initBlocksUI(refs) {
   function buildStationBlock(st, multiCats) {
     const wrap = document.createElement('div');
     wrap.className = 'station-block';
+    // ここは innerHTML なので escapeHtml を使用
     wrap.innerHTML = `<div class="station-header"><div class="station-title">${escapeHtml(st.name)}</div></div>`;
     if (!multiCats.length) {
       const p = document.createElement('p');
@@ -46,7 +47,7 @@ export function initBlocksUI(refs) {
       seg.style.margin = '8px 0';
       const title = document.createElement('div');
       title.className = 'subsection-title';
-      title.textContent = escapeHtml(cat);
+      title.textContent = cat; // ← escapeHtmlは不要（textContent）
       seg.appendChild(title);
       const inner = document.createElement('div');
       seg.appendChild(inner);
@@ -60,14 +61,14 @@ export function initBlocksUI(refs) {
   }
 
   function renderCategories() {
-    // 指令センター（選択済みのみ描画）
+    // 指令センター
     singleCatsContainer.innerHTML = '';
     const selectedSingles = [...selectedCategories]
       .filter(c => (dataMap[c]?.mode || 'single') === 'single')
       .sort((a,b)=>a.localeCompare(b,'ja'));
     selectedSingles.forEach(cat => singleCatsContainer.appendChild(buildSingleCategoryBlock(cat)));
 
-    // 基地局
+    // 基地局（state.sharedStations を常に最新で参照）
     multiStationsContainer.innerHTML = '';
     const selectedMultis = [...selectedCategories]
       .filter(c => (dataMap[c]?.mode) === 'multi')
