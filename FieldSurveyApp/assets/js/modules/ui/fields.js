@@ -4,7 +4,7 @@ import { readFileAsDataURL, resizeImage } from '../utils.js';
 function setNgReasonVisibility(container, model) {
   const el = container.querySelector('[data-field-key="diagramNgReason"]');
   if (el) {
-    el.style.display = model.diagramOK === false ? '' : 'none';
+    el.style.display = model.diagramStatus === 'ng' ? '' : 'none';
   }
 }
 
@@ -49,20 +49,37 @@ export const FieldRenderers = {
       .addEventListener('input', e => (model[field.key] = e.target.value));
   },
 
-  checkbox: (container, model, field, fid) => {
-    const checked = !!model[field.key];
+  radio: (container, model, field, fidBase) => {
+    const opts = Array.isArray(field.options) ? field.options : [];
+    const name = `radio_${fidBase}`;
+    const value = model[field.key] ?? (opts[0]?.value ?? '');
+    if (model[field.key] == null) model[field.key] = value;
+
+    const radios = opts.map((o, i) => {
+      const id = `${fidBase}_${i}`;
+      const checked = value === o.value ? 'checked' : '';
+      return `
+        <label style="display:inline-flex; align-items:center; gap:6px; margin-right:12px;">
+          <input type="radio" name="${name}" id="${id}" value="${o.value}" ${checked} />
+          <span>${o.label}</span>
+        </label>`;
+    }).join('');
+
     container.insertAdjacentHTML('beforeend', `
       <div class="form-row" data-field-key="${field.key}">
-        <label for="${fid}">${field.label}</label>
-        <input id="${fid}" type="checkbox" ${checked ? 'checked' : ''} />
+        <label>${field.label}</label>
+        <div>${radios}</div>
       </div>`);
-    const inputEl = container.querySelector(`#${fid}`);
-    inputEl.addEventListener('change', e => {
-      model[field.key] = !!e.target.checked;
-      // 「系統図との整合性」チェックに連動して NG理由の表示切替
-      if (field.key === 'diagramOK') {
-        setNgReasonVisibility(container, model);
-      }
+
+    container.querySelectorAll(`input[name="${name}"]`).forEach(inp => {
+      inp.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          model[field.key] = e.target.value;
+          if (field.key === 'diagramStatus') {
+            setNgReasonVisibility(container, model);
+          }
+        }
+      });
     });
   },
 
@@ -138,7 +155,7 @@ export function renderField(container, model, field, fid) {
   if (!fn) return;
   fn(container, model, field, fid);
   // 初期表示時の NG理由の表示制御
-  if (field.key === 'diagramOK' || field.key === 'diagramNgReason') {
+  if (field.key === 'diagramStatus' || field.key === 'diagramNgReason') {
     setNgReasonVisibility(container, model);
   }
 }
