@@ -42,7 +42,7 @@ export function bootstrapApp() {
       onStationsChanged: () => blocks.renderCategories(),
     }
   );
-  const blocks = initBlocksUI({ singleCatsContainer, multiStationsContainer, projectDateEl, sharedStations });
+  const blocks = initBlocksUI({ singleCatsContainer, multiStationsContainer, projectDateEl });
 
   // 表紙の調査日自動反映（個別上書きは保持）
   let projectDatePrev = "";
@@ -126,4 +126,5 @@ export function bootstrapApp() {
       alert('Excelの読み込みに失敗しました。ファイル形式とフォーマットをご確認ください。');
     }
   });
+
 }
