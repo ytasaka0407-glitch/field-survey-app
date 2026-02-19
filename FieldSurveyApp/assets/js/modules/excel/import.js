@@ -177,14 +177,15 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
 
     // 画像の取り込み（既存ロジック）
     if (typeof ws.getImages === 'function' && typeof wb.getImage === 'function') {
-      const ROWS_PER_CAPTION = 11;
-      const BLOCK_ROWS       = 11;
-      const GAP_ROWS         = 2;
+      // export 側と揃える
+      const DESC_COL = 'G';
+      const ROWS_PER_CAPTION = 11;  // 説明として確保している行数（結合範囲の縦高さ）
+      const BLOCK_ROWS       = 11;  // 1画像ブロックの縦方向行数（説明部の行数に合わせる）
 
       let images = ws.getImages();
       images = Array.isArray(images) ? images.slice() : [];
       images.sort((a, b) => ((a.tl?.row ?? 0) - (b.tl?.row ?? 0)));
-
+    
       const lastRowNum = ws.lastRow?.number || 1000;
       let firstCaptionStart = null;
       for (let r = 8; r <= lastRowNum; r++) {
@@ -196,22 +197,30 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         const meta = images[i];
         const img = wb.getImage(meta.imageId);
         if (!img || !img.buffer) continue;
+    
+        // DataURLへ変換
         const dataUrl = bufferToDataUrl(img.buffer, img.extension);
-
+    
+        // 説明ブロックの開始行（export側では画像は startRow-1 に描画、説明は startRow〜）
+        const captionStartRow = ((meta.tl?.row ?? 0) + 1);
+    
+        // 結合セルのマスター（先頭行）を読む。空ならブロック内で最初のテキストを拾う
         let caption = '';
-        if (firstCaptionStart != null) {
-          const r0 = firstCaptionStart + i * (BLOCK_ROWS + GAP_ROWS);
-          let val = ws.getCell(`${DESC_COL_START}${r0}`).value;
+        if (captionStartRow >= 1 && captionStartRow <= lastRowNum) {
+          let val = ws.getCell(`${DESC_COL}${captionStartRow}`).value;
           let txt = cellToPlainText(val).trim();
+    
           if (!txt) {
-            for (let r = r0 + 1; r < r0 + ROWS_PER_CAPTION && r <= lastRowNum; r++) {
-              const v = ws.getCell(`${DESC_COL_START}${r}`).value;
+            for (let r = captionStartRow + 1; r < captionStartRow + ROWS_PER_CAPTION && r <= lastRowNum; r++) {
+              const v = ws.getCell(`${DESC_COL}${r}`).value;
               const t = cellToPlainText(v).trim();
               if (t) { txt = t; break; }
             }
           }
+          // セル内改行はLFに正規化
           caption = txt.replace(/\r\n?/g, '\n');
         }
+    
         model.photos.push({ dataUrl, name: '', caption });
       }
     }
@@ -247,3 +256,4 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
+
