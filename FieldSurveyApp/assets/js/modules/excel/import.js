@@ -28,6 +28,7 @@ function cellToPlainText(val) {
   try { return String(val); } catch { return ''; }
 }
 
+// 画像Buffer → DataURL（フォールバック用）
 function bufferToDataUrl(buffer, extension) {
   const mime = extension === 'png' ? 'image/png' : 'image/jpeg';
   const u8 = (buffer instanceof Uint8Array) ? buffer : new Uint8Array(buffer);
@@ -58,7 +59,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 
-  // PHOTO_DATA: ['recordId','partIndex','dataPart'] を再結合
+  // PHOTO_DATA（新方式）: ['recordId','partIndex','dataPart'] を再結合
   const photoDataMap = new Map(); // recordId -> dataUrl
   const wsPhotoData = wb.getWorksheet('PHOTO_DATA');
   if (wsPhotoData) {
@@ -82,7 +83,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 
-  // PHOTOS 読み込み（新/旧対応）
+  // PHOTOS（新/旧対応）
   // 新: ['recordId','type','sheetName','category','station','fileName','caption','imgCol','imgRowStart']
   // 旧: ['type','category','station','fileName','caption','dataUrl']
   const photosSheet = wb.getWorksheet('PHOTOS');
@@ -105,7 +106,6 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         const station     = String(photosSheet.getCell(`E${r}`).value ?? '').trim();
         const fileName    = String(photosSheet.getCell(`F${r}`).value ?? '').trim();
         const captionRec  = String(photosSheet.getCell(`G${r}`).value ?? '').trim();
-        const imgColRaw   = photosSheet.getCell(`H${r}`).value; // 未使用だが残す
         const imgRowRaw   = photosSheet.getCell(`I${r}`).value;
         const imgRowStart = Number(imgRowRaw || 0);
         const dataUrl     = recordId ? (photoDataMap.get(recordId) || '') : '';
@@ -127,13 +127,12 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 
-  // カテゴリシート
+  // カテゴリシート読み取り
   for (const ws of wb.worksheets) {
     if (!ws) continue;
     const name = ws.name;
     if (name === '表紙' || name === '目次' || name === 'PHOTOS' || name === 'PHOTO_DATA') continue;
 
-    // 種別判定
     const label = String(ws.getCell('A1').value ?? '').trim();
     const sheetName = String(ws.name ?? '').trim();
     let isMulti = false;
@@ -174,7 +173,6 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       model = ensureSingle(catName, projectDateEl.value || "");
       selectedCategories.add(catName);
     }
-
     if (inDate) model.date = inDate;
     model.location = (locVal ?? '').toString();
     if (!Array.isArray(model.photos)) model.photos = [];
@@ -187,6 +185,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       if (aText === '追加項目') break;
       const v = ws.getCell(`B${r}`).value;
       const valStr = (v ?? '').toString().trim();
+
       for (const f of CORE_EXTRA_FIELDS) {
         if (aText === (f.label || f.key)) {
           if (f.key === 'installType') {
@@ -244,34 +243,18 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       }
     }
 
-    // 写真の取り込み（最優先: PHOTOS新方式 → 次点: 旧方式 → 最後: フォールバック）
+    // 写真の取り込み（優先順: PHOTOS新方式 → PHOTOS旧方式 → フォールバック）
     let sheetPhotosApplied = false;
 
-    // PHOTOS（新方式）：位置で説明ブロック（G列）をスキャンしてcaptionを上書き（手編集反映・基本欄の誤検出回避）
+    // PHOTOS（新方式）：PHOTOSのcaptionを信頼して使用（位置再読込による上書きは行わない）
     if (photosBySheet.has(sheetName)) {
       const list = photosBySheet.get(sheetName);
-      const DESC_COL = 'G';
-      const BLOCK_ROWS = 11;   // export側と一致
-      const MIN_CAPTION_ROW = 8;
-      const lastRowNum = ws.lastRow?.number || 1000;
-
       for (const rec of list) {
         if (rec.type === (isMulti ? 'multi' : 'single')
           && rec.category === catName
           && (isMulti ? (rec.station === (stationName || '')) : true)) {
-
-          let caption = rec.caption || '';
-          const start = Math.max(Number(rec.imgRowStart || 0), MIN_CAPTION_ROW);
-          const end   = Math.min(start + BLOCK_ROWS - 1, lastRowNum);
-
-          // 説明ブロック内（G列 start〜end）を上から順にスキャン
-          for (let r = start; r <= end; r++) {
-            const v = ws.getCell(`${DESC_COL}${r}`).value;
-            const t = cellToPlainText(v).trim();
-            if (t) { caption = t.replace(/\r\n?/g, '\n'); break; }
-          }
-
-          model.photos.push({ dataUrl: rec.dataUrl || '', name: rec.name || '', caption });
+          // dataUrl は PHOTO_DATA から復元済み、caption は PHOTOS の値を使用
+          model.photos.push({ dataUrl: rec.dataUrl || '', name: rec.name || '', caption: rec.caption || '' });
         }
       }
       sheetPhotosApplied = model.photos.length > 0;
@@ -309,20 +292,26 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         let start = Math.max(tlRow0 + 1, MIN_CAPTION_ROW);
         const end = Math.min(start + ROWS_PER_CAPTION - 1, lastRow);
 
-        // 近傍の結合セルを優先（ズレ補正）
+        // 近傍の結合セル（G列マスター）を優先し、B列結合（基本欄）を除外
         const OFFSETS = [-2, -1, 0, 1, 2, 3, 4];
         for (const off of OFFSETS) {
           const r = tlRow0 + 1 + off;
           if (r < MIN_CAPTION_ROW || r > lastRow) continue;
-          const cell = ws.getCell(`${DESC_COL}${r}`);
-          if (cell && cell.isMerged) { start = r; break; }
+          const bCell = ws.getCell(`B${r}`);
+          if (bCell && bCell.isMerged) continue; // 基本欄由来は除外
+          const gCell = ws.getCell(`${DESC_COL}${r}`);
+          if (gCell && gCell.isMerged) { start = r; break; }
         }
 
         let caption = '';
         for (let r = start; r <= end; r++) {
-          const v = ws.getCell(`${DESC_COL}${r}`).value;
-          const t = cellToPlainText(v).trim();
-          if (t) { caption = t.replace(/\r\n?/g, '\n'); break; }
+          const bCell = ws.getCell(`B${r}`);
+          if (bCell && bCell.isMerged) continue;
+          const gCell = ws.getCell(`${DESC_COL}${r}`);
+          if (gCell && gCell.isMerged) {
+            const t = cellToPlainText(gCell.value).trim();
+            if (t) { caption = t.replace(/\r\n?/g, '\n'); break; }
+          }
         }
 
         model.photos.push({ dataUrl, name: '', caption });
