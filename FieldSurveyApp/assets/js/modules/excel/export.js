@@ -16,6 +16,12 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const linkStyle         = { font: { color: { argb: 'FF1F4E79' }, underline: true, name: 'Meiryo UI' } };
   const borderThin        = { style: 'thin', color: { argb: 'FF999999' } };
 
+  // 安全な文字列長（Excel 1セル=最大32767文字。余裕を見て32000に制限）
+  const safeStr = (s, max = 32000) => {
+    const t = (s ?? '').toString();
+    return t.length > max ? t.slice(0, max) : t;
+  };
+
   const projectDateStr = projectDate || '';
   const exportDate     = new Date();
   const coverDate      = fromInputDate(projectDateStr) || exportDate;
@@ -30,7 +36,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   wsCover.getCell('A3').value = '現地調査報告書';
   wsCover.getCell('A3').style = titleStyle;
   wsCover.getCell('G8').value = '案件名'; wsCover.getCell('G8').style = labelStyle;
-  wsCover.getCell('H8').value = projectTitle || '-';
+  wsCover.getCell('H8').value = safeStr(projectTitle || '-');
   wsCover.getCell('H8').font  = { name: 'Meiryo UI' };
   wsCover.getCell('G10').value = '日付'; wsCover.getCell('G10').style = labelStyle;
   wsCover.getCell('H10').value = coverDate; wsCover.getCell('H10').numFmt = 'yyyy/mm/dd';
@@ -77,6 +83,10 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     }
   }
 
+  // PHOTOSシート用のマニフェスト（画像を埋め込んだ位置を記録）
+  // 新フォーマット: ['type','sheetName','category','station','fileName','caption','imgCol','imgRowStart']
+  const photoManifests = [];
+
   async function addOneEntrySheet(entry) {
     const ws = wb.addWorksheet(entry.sheetName, {
       pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 } },
@@ -103,15 +113,14 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
     // 設置場所
     ws.getCell('A4').value = '設置場所'; ws.getCell('A4').style = labelStyle;
-    ws.mergeCells('B4:J4'); ws.getCell('B4').value = entry.model.location || '-';
+    ws.mergeCells('B4:J4'); ws.getCell('B4').value = safeStr(entry.model.location || '-');
     ws.getCell('B4').font  = { name: 'Meiryo UI' };
 
     // 罫線（上段の区切り）
     applyBottomBorderRange(ws, 1, 1, 3);  // A3
     applyBottomBorderRange(ws, 2, 2, 3);  // B3
     applyBottomBorderRange(ws, 1, 1, 4);  // A4
-    // B4 は結合セル（B〜J）なので全範囲に引く
-    applyBottomBorderRange(ws, 2, 10, 4);
+    applyBottomBorderRange(ws, 2, 10, 4); // B4:J4（結合範囲全体）
 
     // 以降の基本項目
     let nextRow = 5;
@@ -129,7 +138,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       ws.getCell(`A${nextRow}`).value = '設置方法';
       ws.getCell(`A${nextRow}`).style = labelStyle;
       ws.mergeCells(`B${nextRow}:J${nextRow}`);
-      ws.getCell(`B${nextRow}`).value = (entry.model.method ?? '').toString() || '-';
+      ws.getCell(`B${nextRow}`).value = safeStr((entry.model.method ?? '').toString() || '-');
       ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
 
       // 設置方法の行の下に罫線（A列とB〜J 全範囲）
@@ -152,7 +161,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       ws.getCell(`A${nextRow}`).value = 'NG理由';
       ws.getCell(`A${nextRow}`).style = labelStyle;
       ws.mergeCells(`B${nextRow}:J${nextRow}`);
-      ws.getCell(`B${nextRow}`).value = (entry.model.diagramNgReason ?? '').toString() || '-';
+      ws.getCell(`B${nextRow}`).value = safeStr((entry.model.diagramNgReason ?? '').toString() || '-');
       ws.getCell(`B${nextRow}`).alignment = { wrapText: true, vertical: 'top' };
       ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
 
@@ -167,7 +176,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.getCell(`A${nextRow}`).value = 'その他調査内容';
     ws.getCell(`A${nextRow}`).style = labelStyle;
     ws.mergeCells(`B${nextRow}:J${nextRow+1}`);
-    ws.getCell(`B${nextRow}`).value     = (entry.model.details || '').replace(/\r?\n/g, '\n');
+    ws.getCell(`B${nextRow}`).value     = safeStr((entry.model.details || '').replace(/\r?\n/g, '\n'));
     ws.getCell(`B${nextRow}`).alignment = { wrapText: true, vertical: 'top' };
     ws.getCell(`B${nextRow}`).font      = { name: 'Meiryo UI' };
     ws.getRow(nextRow).height = 22;
@@ -194,7 +203,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
         ws.getCell(`A${row}`).font  = { name: 'Meiryo UI' };
         ws.mergeCells(`B${row}:J${row}`);
         const val = entry.model[f.key];
-        ws.getCell(`B${row}`).value = (val ?? '').toString();
+        ws.getCell(`B${row}`).value = safeStr((val ?? '').toString());
         ws.getCell(`B${row}`).alignment = { wrapText: true, vertical: 'top' };
         ws.getCell(`B${row}`).font = { name: 'Meiryo UI' };
         ws.getCell(`K${row}`).value = f.key; // インポート用キー
@@ -224,10 +233,12 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     for (let i = 0; i < photos.length; i++) {
       const p = photos[i];
 
+      // ブロックの高さを確保
       for (let r = startRow; r < startRow + BLOCK_ROWS; r++) {
         ws.getRow(r).height = ROW_HEIGHT_PT;
       }
 
+      // 画像描画サイズを算出
       let containerH = 0;
       for (let rr = startRow; rr < startRow + BLOCK_ROWS; rr++) {
         containerH += rowPixels(rr);
@@ -240,21 +251,24 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       const drawW  = Math.max(1, Math.floor(imgW * ratio));
       const drawH  = Math.max(1, Math.floor(imgH * ratio));
 
+      // 左側（B列起点）に画像を描画
+      const imgId = wb.addImage({
+        base64: p.dataUrl.split(',')[1], // 純粋なBase64文字列
+        extension: p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg',
+      });
       ws.addImage(
-        wb.addImage({
-          base64: p.dataUrl.split(',')[1],
-          extension: p.dataUrl.startsWith('data:image/png') ? 'png' : 'jpeg',
-        }),
+        imgId,
         {
-          tl:  { col: colLetterToIndex(IMAGE_COLS[0]), row: startRow - 1 },
+          tl:  { col: colLetterToIndex(IMAGE_COLS[0]), row: startRow - 1 }, // 0-based row
           ext: { width: drawW, height: drawH },
         }
       );
 
+      // 右側（G〜J列）に説明欄
       const descRange = `${DESC_COL_START}${startRow}:${DESC_COL_END}${startRow + BLOCK_ROWS - 1}`;
       ws.mergeCells(descRange);
       const descCell = ws.getCell(`${DESC_COL_START}${startRow}`);
-      descCell.value = (p.caption || '').replace(/\r\n?/g, '\n');
+      descCell.value = safeStr((p.caption || '').replace(/\r\n?/g, '\n'));
       descCell.alignment = { wrapText: true, vertical: 'top' };
       descCell.font      = { name: 'Meiryo UI' };
       descCell.border    = {
@@ -264,6 +278,20 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
         right:  borderThin,
       };
 
+      // PHOTOSシート用の記録（位置参照方式：データURLは書き出さない）
+      const fileName = p.name || `photo_${i + 1}.jpg`;
+      photoManifests.push({
+        type: entry.type,                       // 'single' | 'multi'
+        sheetName: entry.sheetName,
+        category: entry.cat,
+        station: entry.type === 'multi' ? (entry.stationName || '') : '',
+        fileName,
+        caption: safeStr(p.caption || '', 32000),
+        imgCol: IMAGE_COLS[0],                 // 'B'
+        imgRowStart: startRow,                 // 1-based
+      });
+
+      // 次ブロックへ
       startRow += (BLOCK_ROWS + GAP_ROWS);
     }
   }
@@ -283,30 +311,31 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     tocRow++;
   }
 
-  // PHOTOS シートの書き出し（インポート安定化用、隠しシート）
+  // PHOTOS シート（新フォーマット）を書き出し
+  // ['type','sheetName','category','station','fileName','caption','imgCol','imgRowStart']
   const wsPhotos = wb.addWorksheet('PHOTOS');
-  wsPhotos.getColumn(1).width = 12; // type
-  wsPhotos.getColumn(2).width = 40; // category
-  wsPhotos.getColumn(3).width = 28; // station
-  wsPhotos.getColumn(4).width = 32; // fileName
-  wsPhotos.getColumn(5).width = 60; // caption
-  wsPhotos.getColumn(6).width = 18; // dataUrl（幅は参考）
-  wsPhotos.getRow(1).values = ['type','category','station','fileName','caption','dataUrl'];
-
+  wsPhotos.getColumn(1).width = 10;
+  wsPhotos.getColumn(2).width = 28;
+  wsPhotos.getColumn(3).width = 36;
+  wsPhotos.getColumn(4).width = 24;
+  wsPhotos.getColumn(5).width = 36;
+  wsPhotos.getColumn(6).width = 60;
+  wsPhotos.getColumn(7).width = 8;
+  wsPhotos.getColumn(8).width = 10;
+  wsPhotos.getRow(1).values = ['type','sheetName','category','station','fileName','caption','imgCol','imgRowStart'];
   let pr = 2;
-  for (const e of entries) {
-    const type = e.type; // 'single'|'multi'
-    const category = e.cat;
-    const station  = e.type === 'multi' ? (e.stationName || '') : '';
-    const photos = Array.isArray(e.model.photos) ? e.model.photos : [];
-    for (let i = 0; i < photos.length; i++) {
-      const p = photos[i];
-      const fileName = p.name || `photo_${i + 1}.jpg`;
-      const caption  = (p.caption || '').toString();
-      const dataUrl  = p.dataUrl || '';
-      wsPhotos.getRow(pr).values = [type, category, station, fileName, caption, dataUrl];
-      pr++;
-    }
+  for (const rec of photoManifests) {
+    wsPhotos.getRow(pr).values = [
+      rec.type,
+      rec.sheetName,
+      rec.category,
+      rec.station,
+      rec.fileName,
+      rec.caption,
+      rec.imgCol,
+      rec.imgRowStart
+    ];
+    pr++;
   }
   wsPhotos.state = 'hidden';
 
