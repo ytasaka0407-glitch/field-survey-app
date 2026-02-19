@@ -10,7 +10,7 @@ import {
 import { toInputDateString, stationIdFromName } from '../utils.js';
 import { getSchemaFor } from '../ui/schemas.js';
 
-// 画面の基本欄として取り込むラベルとキー（並びは取込時スキャン順に依存）
+// 画面の基本欄として取り込むラベルとキー
 const CORE_EXTRA_FIELDS = [
   { key: 'installType',     label: '新設/既設流用' },
   { key: 'method',          label: '設置方法' },
@@ -29,7 +29,6 @@ function cellToPlainText(val) {
   try { return String(val); } catch { return ''; }
 }
 
-// 画像Buffer → DataURL変換（埋め込み画像フォールバック用）
 function bufferToDataUrl(buffer, extension) {
   const mime = extension === 'png' ? 'image/png' : 'image/jpeg';
   const u8 = (buffer instanceof Uint8Array) ? buffer : new Uint8Array(buffer);
@@ -40,14 +39,6 @@ function bufferToDataUrl(buffer, extension) {
   }
   const base64 = btoa(binary);
   return `data:${mime};base64,${base64}`;
-}
-
-// 列名の文字（例: 'B'）→ 0-based列番号（B=1）
-function colLetterToIndex(L) {
-  if (typeof L === 'number') return L;
-  if (!L || typeof L !== 'string') return 0;
-  const up = L.trim().toUpperCase();
-  return up.charCodeAt(0) - 65;
 }
 
 export async function importFromExcel(file, projectTitleEl, projectDateEl, setProjectDatePrev) {
@@ -68,9 +59,8 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 
-  // PHOTO_DATA シートから dataUrl を復元（新フォーマット用）
-  // PHOTO_DATA: ['recordId','partIndex','dataPart']
-  const photoDataMap = new Map(); // recordId -> reconstructed dataUrl
+  // PHOTO_DATA（新方式）: 分割dataUrlをrecordIdで復元
+  const photoDataMap = new Map(); // recordId -> dataUrl
   const wsPhotoData = wb.getWorksheet('PHOTO_DATA');
   if (wsPhotoData) {
     const lastRow = wsPhotoData.lastRow?.number || 0;
@@ -84,44 +74,45 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       if (!partsMap.has(recId)) partsMap.set(recId, []);
       partsMap.get(recId).push({ idx, part });
     }
-    // 再結合
-    partsMap.forEach((arr, recId) => {
+    for (const [recId, arr] of partsMap.entries()) {
       arr.sort((a, b) => a.idx - b.idx);
       const dataUrl = arr.map(x => x.part).join('');
       if (dataUrl && dataUrl.startsWith('data:image/')) {
         photoDataMap.set(recId, dataUrl);
       }
-    });
+    }
   }
 
-  // PHOTOS シート（新/旧フォーマット）を最優先で取り込みして、シート単位にグルーピング
+  // PHOTOS を読み込み（新/旧両対応）
   // 新: ['recordId','type','sheetName','category','station','fileName','caption','imgCol','imgRowStart']
-  // 旧: ['type','category','station','fileName','caption','dataUrl'] ← sheetName が無いのでカテゴリ/局名で紐付け
+  // 旧: ['type','category','station','fileName','caption','dataUrl']
   const photosSheet = wb.getWorksheet('PHOTOS');
-  const photosBySheet = new Map(); // sheetName -> [{ type, category, station, name, caption, dataUrl }]
-  const photosByCatStation = new Map(); // `${type}|${category}|${station}` -> [{...}] （旧フォーマット用）
+  const photosBySheet = new Map();        // sheetName -> [{ type, category, station, name, caption, dataUrl, imgRowStart }]
+  const photosByCatStation = new Map();   // `${type}|${category}|${station}` -> [{...}] （旧フォーマット用）
+  let photosRestoredViaSheet = false;
+
   if (photosSheet) {
-    // ヘッダ判定
     const hA1 = String(photosSheet.getCell('A1').value ?? '').trim().toLowerCase();
     const hB1 = String(photosSheet.getCell('B1').value ?? '').trim().toLowerCase();
     const hF1 = String(photosSheet.getCell('F1').value ?? '').trim().toLowerCase();
     const isNewFormat = (hA1 === 'recordid' && hB1 === 'type');
     const isOldFormat = (hA1 === 'type' && hF1 === 'dataurl');
-
     const lastRow = photosSheet.lastRow?.number || 0;
 
     for (let r = 2; r <= lastRow; r++) {
       if (isNewFormat) {
-        const recordId = String(photosSheet.getCell(`A${r}`).value ?? '').trim();
-        const type      = String(photosSheet.getCell(`B${r}`).value ?? '').trim();
-        const sheetName = String(photosSheet.getCell(`C${r}`).value ?? '').trim();
-        const category  = String(photosSheet.getCell(`D${r}`).value ?? '').trim();
-        const station   = String(photosSheet.getCell(`E${r}`).value ?? '').trim();
-        const fileName  = String(photosSheet.getCell(`F${r}`).value ?? '').trim();
-        const caption   = String(photosSheet.getCell(`G${r}`).value ?? '').trim();
-        const dataUrl   = recordId ? (photoDataMap.get(recordId) || '') : '';
+        const recordId   = String(photosSheet.getCell(`A${r}`).value ?? '').trim();
+        const type       = String(photosSheet.getCell(`B${r}`).value ?? '').trim();
+        const sheetName  = String(photosSheet.getCell(`C${r}`).value ?? '').trim();
+        const category   = String(photosSheet.getCell(`D${r}`).value ?? '').trim();
+        const station    = String(photosSheet.getCell(`E${r}`).value ?? '').trim();
+        const fileName   = String(photosSheet.getCell(`F${r}`).value ?? '').trim();
+        const captionRec = String(photosSheet.getCell(`G${r}`).value ?? '').trim();
+        const imgRowRaw  = photosSheet.getCell(`I${r}`).value;
+        const imgRowStart = Number(imgRowRaw || 0);
+        const dataUrl    = recordId ? (photoDataMap.get(recordId) || '') : '';
 
-        const rec = { type, category, station, name: fileName, caption, dataUrl };
+        const rec = { type, category, station, name: fileName, caption: captionRec, dataUrl, imgRowStart };
         if (!photosBySheet.has(sheetName)) photosBySheet.set(sheetName, []);
         photosBySheet.get(sheetName).push(rec);
       } else if (isOldFormat) {
@@ -140,16 +131,15 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 
-  // カテゴリシートの読み取り（基本欄・追加項目・写真）
+  // カテゴリシートの読み取り
   for (const ws of wb.worksheets) {
     if (!ws) continue;
     const name = ws.name;
     if (name === '表紙' || name === '目次' || name === 'PHOTOS' || name === 'PHOTO_DATA') continue;
 
-    // シート種別とカテゴリ名・基地局名の判定
+    // 種別判定
     const label = String(ws.getCell('A1').value ?? '').trim();
     const sheetName = String(ws.name ?? '').trim();
-
     let isMulti = false;
     let catName = '';
     let stationName = '';
@@ -171,7 +161,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
     if (!catName) continue;
 
-    // 基本欄（調査日・設置場所）
+    // 基本欄
     const inDate = toInputDateString(ws.getCell('B3').value);
     const locVal = ws.getCell('B4').value;
 
@@ -188,12 +178,11 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       model = ensureSingle(catName, projectDateEl.value || "");
       selectedCategories.add(catName);
     }
-
     if (inDate) model.date = inDate;
     model.location = (locVal ?? '').toString();
     if (!Array.isArray(model.photos)) model.photos = [];
 
-    // 基本欄（ラベルで取り込み）: 行5〜「追加項目」まで走査
+    // ラベルで基本欄の追加項目を取り込み（新レイアウト）
     let detailsSet = false;
     for (let r = 5; r < 220; r++) {
       const aText = String(ws.getCell(`A${r}`).value ?? '').trim();
@@ -220,13 +209,13 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         }
       }
     }
-    // 旧レイアウト互換（B5に調査内容がある場合の取り込み）
+    // 旧レイアウト互換（B5に調査内容がある場合）
     if (!detailsSet) {
       const detVal = ws.getCell('B5').value;
       if (detVal != null) model.details = (detVal ?? '').toString();
     }
 
-    // 追加項目の取り込み（スキーマ準拠）
+    // 追加項目（スキーマ）
     const schema = getSchemaFor(catName, isMulti ? 'multi' : 'single');
     let extraHeaderRow = null;
     for (let r = 5; r < 220; r++) {
@@ -264,24 +253,33 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       }
     }
 
-    // 写真の取り込み：シート単位で PHOTOS 新フォーマット > 旧フォーマット > 埋め込み画像 の順で適用
+    // 写真の取り込み（最優先: PHOTOS新方式 → 次点: PHOTOS旧方式 → 最後: 埋め込み画像フォールバック）
     let sheetPhotosApplied = false;
 
-    // 新フォーマット（sheetName グループがある場合はそれを使用）
+    // PHOTOS（新方式）：シート名一致＋位置でG列から説明を再取得（手編集の反映）
     if (photosBySheet.has(sheetName)) {
       const list = photosBySheet.get(sheetName);
+      const DESC_COL = 'G';
       for (const rec of list) {
-        // 念のためカテゴリ/局名も一致する場合のみ追加（他シート混入防止）
         if (rec.type === (isMulti ? 'multi' : 'single')
           && rec.category === catName
           && (isMulti ? (rec.station === (stationName || '')) : true)) {
-          model.photos.push({ dataUrl: rec.dataUrl || '', name: rec.name || '', caption: rec.caption || '' });
+
+          let caption = rec.caption || '';
+          const row = Number(rec.imgRowStart || 0);
+          if (row > 0) {
+            const v = ws.getCell(`${DESC_COL}${row}`).value;
+            const t = cellToPlainText(v).trim();
+            if (t) caption = t.replace(/\r\n?/g, '\n');
+          }
+          model.photos.push({ dataUrl: rec.dataUrl || '', name: rec.name || '', caption });
         }
       }
       sheetPhotosApplied = model.photos.length > 0;
+      if (sheetPhotosApplied) photosRestoredViaSheet = true;
     }
 
-    // 旧フォーマット（カテゴリ/局名キーで拾う）
+    // PHOTOS（旧方式）：カテゴリ/局名キーで復元
     if (!sheetPhotosApplied && photosByCatStation.size) {
       const key = `${isMulti ? 'multi' : 'single'}|${catName}|${isMulti ? (stationName || '') : ''}`;
       const list = photosByCatStation.get(key);
@@ -289,11 +287,11 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         for (const rec of list) {
           model.photos.push({ dataUrl: rec.dataUrl || '', name: rec.name || '', caption: rec.caption || '' });
         }
-        sheetPhotosApplied = true;
+        sheetPhotosApplied = model.photos.length > 0;
       }
     }
 
-    // 埋め込み画像フォールバック（PHOTOS が無い古いファイルのみ）
+    // 埋め込み画像フォールバック（PHOTOSが無い古いファイルのみ）
     if (!sheetPhotosApplied && typeof ws.getImages === 'function' && typeof wb.getImage === 'function') {
       const DESC_COL = 'G';
       const ROWS_PER_CAPTION = 11;
@@ -321,10 +319,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
           const r = tlRow0 + 1 + off;
           if (r < MIN_CAPTION_ROW || r > lastRowNum) continue;
           const cell = ws.getCell(`${DESC_COL}${r}`);
-          if (cell && cell.isMerged) {
-            captionStartRow = r;
-            break;
-          }
+          if (cell && cell.isMerged) { captionStartRow = r; break; }
         }
 
         let caption = '';
