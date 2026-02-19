@@ -16,9 +16,14 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const linkStyle         = { font: { color: { argb: 'FF1F4E79' }, underline: true, name: 'Meiryo UI' } };
   const borderThin        = { style: 'thin', color: { argb: 'FF999999' } };
 
-  // 単一カテゴリの“基本欄”として上部に出力したい追加項目（ここに追記していく）
+  // 単一カテゴリの“基本欄”として上部に出力したい追加項目
   const CORE_SINGLE_EXTRA_FIELDS = [
-    { key: 'method', label: '設置方法' }, // ← 追加したい項目
+    { key: 'method', label: '設置方法' },
+  ];
+  // Single/Multi共通の基本欄追加
+  const CORE_COMMON_EXTRA_FIELDS = [
+    { key: 'isReuse',    label: '新設/既設流用',  format: (v) => (v ? '既設流用' : '新設') },
+    { key: 'diagramOK',  label: '系統図との整合性', format: (v) => (v === false ? 'NG' : 'OK') },
   ];
 
   const projectDateStr = projectDate || '';
@@ -83,7 +88,6 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     });
     ws.views = [{ showGridLines: false }];
 
-    // 列幅設定 + メタキー用のK列は非表示にする
     const colWidths = [10, 16, 16, 18, 16, 16, 18, 16, 16, 18, 10, 10]; // A〜L
     colWidths.forEach((w, i) => ws.getColumn(i+1).width = w);
     ws.getColumn(11).hidden = true; // K列（フィールドキー格納）
@@ -116,22 +120,36 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.getCell('B4').border = { bottom: borderThin };
     ws.getCell('B5').border = { bottom: borderThin };
 
-    // ここから“基本欄として出す追加項目（単一カテゴリ用）”
-    let nextRow = 7; // A7/B7 から追記
-    if (entry.type === 'single' && CORE_SINGLE_EXTRA_FIELDS.length) {
-      for (const f of CORE_SINGLE_EXTRA_FIELDS) {
-        ws.getCell(`A${nextRow}`).value = f.label;
-        ws.getCell(`A${nextRow}`).style = labelStyle;
-        ws.mergeCells(`B${nextRow}:J${nextRow}`);
-        ws.getCell(`B${nextRow}`).value = (entry.model[f.key] ?? '').toString() || '-';
-        ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
-        nextRow++;
-      }
+    // 基本欄追加（共通）
+    let nextRow = 7;
+    const coreExtras = [
+      ...CORE_COMMON_EXTRA_FIELDS,
+      ...(entry.type === 'single' ? CORE_SINGLE_EXTRA_FIELDS : []),
+    ];
+    for (const f of coreExtras) {
+      ws.getCell(`A${nextRow}`).value = f.label;
+      ws.getCell(`A${nextRow}`).style = labelStyle;
+      ws.mergeCells(`B${nextRow}:J${nextRow}`);
+      const raw = entry.model[f.key];
+      const val = f.format ? f.format(raw) : (raw ?? '').toString();
+      ws.getCell(`B${nextRow}`).value = val || '-';
+      ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
+      nextRow++;
+    }
+    // NG理由（diagramOKがfalseの時のみ）
+    if (entry.model.diagramOK === false) {
+      ws.getCell(`A${nextRow}`).value = 'NG理由';
+      ws.getCell(`A${nextRow}`).style = labelStyle;
+      ws.mergeCells(`B${nextRow}:J${nextRow}`);
+      ws.getCell(`B${nextRow}`).value = (entry.model.diagramNgReason ?? '').toString() || '-';
+      ws.getCell(`B${nextRow}`).alignment = { wrapText: true, vertical: 'top' };
+      ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
+      nextRow++;
     }
 
-    // “追加項目”セクション（スキーマ定義に基づく。コア扱いのキーは除外）
+    // 追加項目（スキーマ定義に基づく。コア扱いのキーは除外）
     const schema = getSchemaFor(entry.cat, entry.type === 'multi' ? 'multi' : 'single');
-    const CORE_KEYS = new Set(['date','location','details','photos','method']); // ← method をコア扱いで除外
+    const CORE_KEYS = new Set(['date','location','details','photos','method','isReuse','diagramOK','diagramNgReason']);
     const extraFields = schema.filter(f => !CORE_KEYS.has(f.key));
 
     if (extraFields.length) {
@@ -154,51 +172,43 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       nextRow = extraStartRow + extraFields.length;
     }
 
-    // 写真セクション（左右分割：左=画像、右=説明。1ページ2枚相当）
+    // 写真セクション（左右分割）
     let startRow = nextRow + 1;
     const photos = Array.isArray(entry.model.photos) ? entry.model.photos : [];
-    
-    // 左側の画像エリアの列（B〜F）、右側の説明エリアの列（G〜J）
+
     const IMAGE_COLS = ['B','C','D','E','F'];
     const DESC_COL_START = 'G';
     const DESC_COL_END   = 'J';
-    
-    // 行の高さと、1ブロック（半ページ）あたりの使用行数
-    const ROW_HEIGHT_PT = 24;   // 1行=24pt（見え方に応じて調整可）
-    const BLOCK_ROWS    = 11;   // 画像＋説明で使用する行数（“半ページ”相当）
-    
-    // 列幅→ピクセル、行高(ポイント)→ピクセルの簡易換算
+
+    const ROW_HEIGHT_PT = 24;
+    const BLOCK_ROWS    = 11;
+
     const colPixels = (colIdx) => (ws.getColumn(colIdx+1).width || 10) * 7;
     const rowPixels = (rowIdx) => (ws.getRow(rowIdx).height || 18) * 1.333;
     const sumColPixels = (letters) =>
       letters.reduce((sum, L) => sum + colPixels(colLetterToIndex(L)), 0);
-    
-    // 画像領域の横幅（ピクセル）
+
     const containerW = sumColPixels(IMAGE_COLS);
-    
+
     for (let i = 0; i < photos.length; i++) {
       const p = photos[i];
-    
-      // ブロックの行高を確保（“半ページ”分の高さを作る）
+
       for (let r = startRow; r < startRow + BLOCK_ROWS; r++) {
         ws.getRow(r).height = ROW_HEIGHT_PT;
       }
-    
-      // 画像領域の高さ（ピクセル）
+
       let containerH = 0;
       for (let rr = startRow; rr < startRow + BLOCK_ROWS; rr++) {
         containerH += rowPixels(rr);
       }
-    
-      // 画像実寸からフィットサイズを計算（縦横比維持）
+
       const { w: imgW, h: imgH } = await getImageDim(p.dataUrl);
       const ratioW = containerW / imgW;
       const ratioH = containerH / imgH;
       const ratio  = Math.min(ratioW, ratioH);
       const drawW  = Math.max(1, Math.floor(imgW * ratio));
       const drawH  = Math.max(1, Math.floor(imgH * ratio));
-    
-      // 左側（B列の位置）に画像を描画
+
       ws.addImage(
         wb.addImage({
           base64: p.dataUrl.split(',')[1],
@@ -209,8 +219,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
           ext: { width: drawW, height: drawH },
         }
       );
-    
-      // 右側（G〜J列）に説明欄を縦いっぱいで作成
+
       const descRange = `${DESC_COL_START}${startRow}:${DESC_COL_END}${startRow + BLOCK_ROWS - 1}`;
       ws.mergeCells(descRange);
       const descCell = ws.getCell(`${DESC_COL_START}${startRow}`);
@@ -223,16 +232,14 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
         bottom: borderThin,
         right:  borderThin,
       };
-    
-      // 次の画像ブロックへ（“半ページ”分の高さを使ったのでその分進める）
-      startRow += (BLOCK_ROWS + 2); // +2は余白
+
+      startRow += (BLOCK_ROWS + 2);
     }
   }
   for (const e of entries) {
     await addOneEntrySheet(e);
   }
 
-  // 目次
   let tocRow = 3;
   for (const e of entries) {
     wsToc.getCell(`A${tocRow}`).value = { text: e.displayLabel, hyperlink: `#'${e.sheetName}'!A1` };
@@ -243,22 +250,11 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     tocRow++;
   }
 
-  // 保存
   const buf = await wb.xlsx.writeBuffer();
-  // 例: 「案件名_現地調査レポート.xlsx」
-  // 空の場合は「現地調査レポート.xlsx」
   const title = (projectTitle || '').trim();
   const suffix = '現地調査レポート';
   const namePart = title ? `${title}_${suffix}` : suffix;
-  
-  // Windows等で無効な文字を避けるため簡易サニタイズ
   const safeNamePart = namePart.replace(/[\\/:*?"<>|]/g, '_');
-  
   const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
-
-
-
-
-
