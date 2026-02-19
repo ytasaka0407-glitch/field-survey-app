@@ -78,7 +78,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     });
     ws.views = [{ showGridLines: false }];
 
-    const colWidths = [10, 16, 16, 18, 16, 16, 18, 16, 16, 18, 10, 10]; // A〜L
+    const colWidths = [20, 16, 16, 18, 16, 16, 18, 16, 16, 18, 10, 10]; // A〜L
     colWidths.forEach((w, i) => ws.getColumn(i+1).width = w);
     ws.getColumn(11).hidden = true; // K列（フィールドキー格納）
 
@@ -117,6 +117,11 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       ws.mergeCells(`B${nextRow}:J${nextRow}`);
       ws.getCell(`B${nextRow}`).value = (entry.model.method ?? '').toString() || '-';
       ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
+    
+      // ↓ 追加：設置方法の行の下に罫線
+      ws.getCell(`A${nextRow}`).border = { bottom: borderThin };
+      ws.getCell(`B${nextRow}`).border = { bottom: borderThin };
+    
       nextRow++;
     }
 
@@ -136,6 +141,11 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       ws.getCell(`B${nextRow}`).value = (entry.model.diagramNgReason ?? '').toString() || '-';
       ws.getCell(`B${nextRow}`).alignment = { wrapText: true, vertical: 'top' };
       ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
+    
+      // ↓ 追加：NG理由の行の下に罫線
+      ws.getCell(`A${nextRow}`).border = { bottom: borderThin };
+      ws.getCell(`B${nextRow}`).border = { bottom: borderThin };
+    
       nextRow++;
     }
 
@@ -268,3 +278,4 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
+
