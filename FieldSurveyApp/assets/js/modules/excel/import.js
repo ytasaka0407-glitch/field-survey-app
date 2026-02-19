@@ -247,33 +247,56 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
 
     // PHOTOS（新方式）：imgRowStart の G列（先頭行）だけを読み取り。写真ごとに独立してキャプション決定
     if (photosBySheet.has(sheetName)) {
-      const list = photosBySheet.get(sheetName);
-      for (const rec of list) {
-        if (rec.type === (isMulti ? 'multi' : 'single')
-          && rec.category === catName
-          && (isMulti ? (rec.station === (stationName || '')) : true)) {
-
-          let caption = rec.caption || '';
+      const allRecs = photosBySheet.get(sheetName);
+      // このシート・カテゴリ（および局名）に属するレコードだけに絞る
+      const recs = allRecs.filter(rec =>
+        rec.type === (isMulti ? 'multi' : 'single') &&
+        rec.category === catName &&
+        (isMulti ? (rec.station === (stationName || '')) : true)
+      );
+    
+      if (recs.length) {
+        // 1) 説明セルの先頭行（imgRowStart）のユニーク集合を作成
+        const uniqueRows = Array.from(
+          new Set(
+            recs.map(r => Number(r.imgRowStart || 0)).filter(n => Number.isFinite(n) && n > 0)
+          )
+        );
+    
+        // 2) 行→キャプションのマップを一括で構築（G列のみ参照）
+        const captionByRow = new Map();
+        for (const row of uniqueRows) {
+          const v = ws.getCell(`G${row}`).value;
+          const t = cellToPlainText(v).trim();
+          captionByRow.set(row, t ? t.replace(/\r\n?/g, '\n') : '');
+        }
+    
+        // 3) 各写真を独立に決定（rowごとに引き当て。空ならPHOTOSのcaptionを採用）
+        for (const rec of recs) {
           const row = Number(rec.imgRowStart || 0);
-
-          if (row > 0) {
-            // 説明ブロックの結合セルマスター（G列の row 行）だけを参照
-            const gCellVal = ws.getCell(`G${row}`).value;
-            const gText = cellToPlainText(gCellVal).trim();
-            if (gText) {
-              caption = gText.replace(/\r\n?/g, '\n');
-            }
+          let caption = '';
+    
+          if (row > 0 && captionByRow.has(row) && captionByRow.get(row)) {
+            caption = captionByRow.get(row);
+          } else {
+            // シート上が空の場合は PHOTOS の caption を初期値として採用
+            caption = rec.caption || '';
           }
-
-          // NG理由との取り違え安全弁
+    
+          // NG理由との取り違え安全弁：完全一致ならPHOTOSのcaptionを優先
           if (caption && model.diagramNgReason && caption === model.diagramNgReason && rec.caption) {
             caption = rec.caption;
           }
-
-          model.photos.push({ dataUrl: rec.dataUrl || '', name: rec.name || '', caption });
+    
+          model.photos.push({
+            dataUrl: rec.dataUrl || '',
+            name: rec.name || '',
+            caption
+          });
         }
+    
+        sheetPhotosApplied = model.photos.length > 0;
       }
-      sheetPhotosApplied = model.photos.length > 0;
     }
 
     // PHOTOS（旧方式）：カテゴリ/局名キーで復元
@@ -336,3 +359,4 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
+
