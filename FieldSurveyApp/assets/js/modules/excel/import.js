@@ -28,7 +28,6 @@ function cellToPlainText(val) {
   try { return String(val); } catch { return ''; }
 }
 
-// 画像Buffer → DataURL（フォールバック用）
 function bufferToDataUrl(buffer, extension) {
   const mime = extension === 'png' ? 'image/png' : 'image/jpeg';
   const u8 = (buffer instanceof Uint8Array) ? buffer : new Uint8Array(buffer);
@@ -83,7 +82,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 
-  // PHOTOS（新/旧対応）
+  // PHOTOS 読み込み（新/旧対応）
   // 新: ['recordId','type','sheetName','category','station','fileName','caption','imgCol','imgRowStart']
   // 旧: ['type','category','station','fileName','caption','dataUrl']
   const photosSheet = wb.getWorksheet('PHOTOS');
@@ -246,15 +245,32 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     // 写真の取り込み（優先順: PHOTOS新方式 → PHOTOS旧方式 → フォールバック）
     let sheetPhotosApplied = false;
 
-    // PHOTOS（新方式）：PHOTOSのcaptionを信頼して使用（位置再読込による上書きは行わない）
+    // PHOTOS（新方式）：imgRowStart の G列（先頭行）だけを読み取り。写真ごとに独立してキャプション決定
     if (photosBySheet.has(sheetName)) {
       const list = photosBySheet.get(sheetName);
       for (const rec of list) {
         if (rec.type === (isMulti ? 'multi' : 'single')
           && rec.category === catName
           && (isMulti ? (rec.station === (stationName || '')) : true)) {
-          // dataUrl は PHOTO_DATA から復元済み、caption は PHOTOS の値を使用
-          model.photos.push({ dataUrl: rec.dataUrl || '', name: rec.name || '', caption: rec.caption || '' });
+
+          let caption = rec.caption || '';
+          const row = Number(rec.imgRowStart || 0);
+
+          if (row > 0) {
+            // 説明ブロックの結合セルマスター（G列の row 行）だけを参照
+            const gCellVal = ws.getCell(`G${row}`).value;
+            const gText = cellToPlainText(gCellVal).trim();
+            if (gText) {
+              caption = gText.replace(/\r\n?/g, '\n');
+            }
+          }
+
+          // NG理由との取り違え安全弁
+          if (caption && model.diagramNgReason && caption === model.diagramNgReason && rec.caption) {
+            caption = rec.caption;
+          }
+
+          model.photos.push({ dataUrl: rec.dataUrl || '', name: rec.name || '', caption });
         }
       }
       sheetPhotosApplied = model.photos.length > 0;
@@ -292,18 +308,19 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         let start = Math.max(tlRow0 + 1, MIN_CAPTION_ROW);
         const end = Math.min(start + ROWS_PER_CAPTION - 1, lastRow);
 
-        // 近傍の結合セル（G列マスター）を優先し、B列結合（基本欄）を除外
+        // 近傍の結合セル（G列マスター）を優先し、B列結合（基本欄）は除外
         const OFFSETS = [-2, -1, 0, 1, 2, 3, 4];
         for (const off of OFFSETS) {
           const r = tlRow0 + 1 + off;
           if (r < MIN_CAPTION_ROW || r > lastRow) continue;
           const bCell = ws.getCell(`B${r}`);
-          if (bCell && bCell.isMerged) continue; // 基本欄由来は除外
+          if (bCell && bCell.isMerged) continue;
           const gCell = ws.getCell(`${DESC_COL}${r}`);
           if (gCell && gCell.isMerged) { start = r; break; }
         }
 
         let caption = '';
+        // フォールバックでは範囲スキャン（最初の非空）
         for (let r = start; r <= end; r++) {
           const bCell = ws.getCell(`B${r}`);
           if (bCell && bCell.isMerged) continue;
