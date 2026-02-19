@@ -3,31 +3,23 @@ import { ensureSingle, ensureMulti, getOrInitStationData, selectedCategories, ad
 import { toInputDateString, stationIdFromName } from '../utils.js';
 import { getSchemaFor } from '../ui/schemas.js';
 
-// 単一カテゴリで“基本欄”として上部に出力した項目（export.js と対応させる）
-const CORE_SINGLE_EXTRA_FIELDS = [
-  { key: 'method', label: '設置方法' },
+const CORE_EXTRA_FIELDS = [
+  { key: 'method',           label: '設置方法',            singleOnly: true },
+  { key: 'isReuse',          label: '新設/既設流用' },
+  { key: 'diagramOK',        label: '系統図との整合性' },
+  { key: 'diagramNgReason',  label: 'NG理由' },
 ];
 
 function cellToPlainText(val) {
   if (val == null) return '';
   if (typeof val === 'string') return val;
   if (typeof val === 'number') return String(val);
-  // 計算式の結果
-  if (val && typeof val === 'object' && 'result' in val) {
-    return cellToPlainText(val.result);
-  }
-  // RichText（Excelで太字等を含む場合）
-  if (val && typeof val === 'object' && Array.isArray(val.richText)) {
-    return val.richText.map(rt => rt.text || '').join('');
-  }
-  // hyperlink等
-  if (val && typeof val === 'object' && ('text' in val || 'hyperlink' in val)) {
-    return String(val.text || val.hyperlink || '');
-  }
+  if (val && typeof val === 'object' && 'result' in val) return cellToPlainText(val.result);
+  if (val && typeof val === 'object' && Array.isArray(val.richText)) return val.richText.map(rt => rt.text || '').join('');
+  if (val && typeof val === 'object' && ('text' in val || 'hyperlink' in val)) return String(val.text || val.hyperlink || '');
   try { return String(val); } catch { return ''; }
 }
 
-// 画像Buffer → DataURL変換ヘルパー
 function bufferToDataUrl(buffer, extension) {
   const mime = extension === 'png' ? 'image/png' : 'image/jpeg';
   const u8 = (buffer instanceof Uint8Array) ? buffer : new Uint8Array(buffer);
@@ -45,7 +37,6 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
   const wb = new window.ExcelJS.Workbook();
   await wb.xlsx.load(buf);
 
-  // 表紙
   const cover = wb.getWorksheet('表紙');
   if (cover) {
     const titleCell = cover.getCell('H8').value;
@@ -58,10 +49,8 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 
-  // 画像説明カラム（左右分割レイアウトの右側開始列。export.jsのDESC_COL_STARTと一致させる）
   const DESC_COL_START = 'G';
 
-  // カテゴリシート
   wb.worksheets.forEach((ws) => {
     if (!ws) return;
     const name = ws.name;
@@ -91,7 +80,6 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
     if (!catName) return;
 
-    // 基本項目
     const inDate = toInputDateString(ws.getCell('B3').value);
     const locVal = ws.getCell('B4').value;
     const detVal = ws.getCell('B5').value;
@@ -115,18 +103,28 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     model.details  = (detVal ?? '').toString();
     if (!Array.isArray(model.photos)) model.photos = [];
 
-    // 単一カテゴリの“基本欄追加”読み取り
-    if (!isMulti && CORE_SINGLE_EXTRA_FIELDS.length) {
-      for (const f of CORE_SINGLE_EXTRA_FIELDS) {
-        for (let r = 7; r < 200; r++) {
-          const aText = String(ws.getCell(`A${r}`).value ?? '').trim();
-          if (!aText) continue;
-          if (aText === '追加項目') break;
-          if (aText === (f.label || f.key)) {
-            const v = ws.getCell(`B${r}`).value;
-            model[f.key] = (v ?? '').toString();
-            break;
+    // 基本欄の追加項目（Single/Multi共通、method は singleOnly）
+    for (let r = 7; r < 200; r++) {
+      const aText = String(ws.getCell(`A${r}`).value ?? '').trim();
+      if (!aText) continue;
+      if (aText === '追加項目') break;
+      const v = ws.getCell(`B${r}`).value;
+      const valStr = (v ?? '').toString().trim();
+
+      // ラベル一致で取り込み
+      for (const f of CORE_EXTRA_FIELDS) {
+        if (f.singleOnly && isMulti) continue;
+        if (aText === (f.label || f.key)) {
+          if (f.key === 'isReuse') {
+            model.isReuse = /既設/.test(valStr);
+          } else if (f.key === 'diagramOK') {
+            model.diagramOK = !/NG/i.test(valStr);
+          } else if (f.key === 'diagramNgReason') {
+            model.diagramNgReason = valStr;
+          } else {
+            model[f.key] = valStr;
           }
+          break;
         }
       }
     }
@@ -141,7 +139,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     if (extraHeaderRow != null) {
       let row = extraHeaderRow + 1;
       let emptyCount = 0;
-      const FORBIDDEN_KEYS = new Set(['date','location','details','photos']);
+      const FORBIDDEN_KEYS = new Set(['date','location','details','photos','method','isReuse','diagramOK','diagramNgReason']);
       while (row < extraHeaderRow + 1 + 200) {
         const labelCell = ws.getCell(`A${row}`);
         const valueCell = ws.getCell(`B${row}`);
@@ -163,83 +161,59 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         }
         if (targetKey && !FORBIDDEN_KEYS.has(targetKey)) {
           const valStr = (valRaw ?? '').toString();
-          if (targetKey === 'method' && model[targetKey]) {
-            // 既に基本欄から取得済みならスキップ
-          } else {
-            model[targetKey] = valStr;
-          }
+          model[targetKey] = valStr;
         }
         row++;
       }
     }
 
-    // 画像の取り込み（Excel埋め込み画像を読む：画像順にG列の説明ブロックを対応付け）
+    // 画像の取り込み（略：既存ロジック）
     if (typeof ws.getImages === 'function' && typeof wb.getImage === 'function') {
-      const DESC_COL = 'G';
-    
-      // ここは「説明ブロックの高さ（行数）」と「ブロック間の余白」に合わせて
-      // export 側の設定と同じ値にしてください。
-      // 例）説明は11行ぶん、ブロック間に2行の余白 → ROWS_PER_CAPTION=11, BLOCK_ROWS=11, GAP_ROWS=2
-      const ROWS_PER_CAPTION = 11;  // 説明として確保している行数
-      const BLOCK_ROWS       = 11;  // 1画像ブロックの縦方向行数（説明部の行数に合わせる）
-      const GAP_ROWS         = 2;   // ブロック間の余白行数（export側の startRow 増分と一致）
-    
-      // 1) シート上の画像メタを取得し、縦位置でソート（上→下）
+      const ROWS_PER_CAPTION = 11;
+      const BLOCK_ROWS       = 11;
+      const GAP_ROWS         = 2;
+
       let images = ws.getImages();
       images = Array.isArray(images) ? images.slice() : [];
       images.sort((a, b) => ((a.tl?.row ?? 0) - (b.tl?.row ?? 0)));
-    
-      // 2) 最初の説明ブロックの開始行をG列で検出（基本欄を避けるため最低行=8）
+
       const lastRowNum = ws.lastRow?.number || 1000;
       let firstCaptionStart = null;
       for (let r = 8; r <= lastRowNum; r++) {
-        const txt = cellToPlainText(ws.getCell(`${DESC_COL}${r}`).value).trim();
+        const txt = cellToPlainText(ws.getCell(`${DESC_COL_START}${r}`).value).trim();
         if (txt) { firstCaptionStart = r; break; }
       }
-    
-      // 3) 画像と説明を画像順に対応付けて photos へ追加
+
       for (let i = 0; i < images.length; i++) {
         const meta = images[i];
         const img = wb.getImage(meta.imageId);
         if (!img || !img.buffer) continue;
-    
-        // DataURLへ変換
         const dataUrl = bufferToDataUrl(img.buffer, img.extension);
-    
-        // 対応する説明ブロックの開始行を算出
+
         let caption = '';
         if (firstCaptionStart != null) {
           const r0 = firstCaptionStart + i * (BLOCK_ROWS + GAP_ROWS);
-    
-          // まずはブロックの先頭行（結合セルのマスター）を読む
-          let val = ws.getCell(`${DESC_COL}${r0}`).value;
+          let val = ws.getCell(`${DESC_COL_START}${r0}`).value;
           let txt = cellToPlainText(val).trim();
-    
-          // 先頭行が空なら、ブロック内（r0 ～ r0+ROWS_PER_CAPTION-1）で最初にテキストがある行を拾う
           if (!txt) {
             for (let r = r0 + 1; r < r0 + ROWS_PER_CAPTION && r <= lastRowNum; r++) {
-              const v = ws.getCell(`${DESC_COL}${r}`).value;
+              const v = ws.getCell(`${DESC_COL_START}${r}`).value;
               const t = cellToPlainText(v).trim();
               if (t) { txt = t; break; }
             }
           }
-    
-          // セル内改行はそのまま維持（CRLF/CRをLFへ正規化）
           caption = txt.replace(/\r\n?/g, '\n');
         }
-    
         model.photos.push({ dataUrl, name: '', caption });
       }
     }
   });
 
-  // 代替：隠しシート "PHOTOS" から写真復元（ExcelJSが画像読めない場合の保険）
   const photosSheet = wb.getWorksheet('PHOTOS');
   if (photosSheet) {
-    // 期待する列: A=type, B=category, C=station, D=fileName, E=caption, F=dataUrl
     const lastRow = photosSheet.lastRow?.number || 0;
     for (let r = 2; r <= lastRow; r++) {
-      const type    = String(photosSheet.getCell(`A${r}`).value ?? '').trim(); // 'single' / 'multi'
+      const type    = String(photosSheet.getCell(`A${r}`).value ?? '').trim();
       const cat     = String(photosSheet.getCell(`B${r}`).value ?? '').trim();
       const station = String(photosSheet.getCell(`C${r}`).value ?? '').trim();
       const name    = String(photosSheet.getCell(`D${r}`).value ?? '').trim();
@@ -264,7 +238,3 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
-
-
-
-
