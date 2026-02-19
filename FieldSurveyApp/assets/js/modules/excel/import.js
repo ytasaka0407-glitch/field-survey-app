@@ -4,10 +4,11 @@ import { toInputDateString, stationIdFromName } from '../utils.js';
 import { getSchemaFor } from '../ui/schemas.js';
 
 const CORE_EXTRA_FIELDS = [
-  { key: 'method',          label: '設置方法',           singleOnly: false },
   { key: 'installType',     label: '新設/既設流用' },
+  { key: 'method',          label: '設置方法' },
   { key: 'diagramStatus',   label: '系統図との整合性' },
   { key: 'diagramNgReason', label: 'NG理由' },
+  { key: 'details',         label: 'その他調査内容' },
 ];
 
 function cellToPlainText(val) {
@@ -37,6 +38,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
   const wb = new window.ExcelJS.Workbook();
   await wb.xlsx.load(buf);
 
+  // 表紙
   const cover = wb.getWorksheet('表紙');
   if (cover) {
     const titleCell = cover.getCell('H8').value;
@@ -82,7 +84,6 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
 
     const inDate = toInputDateString(ws.getCell('B3').value);
     const locVal = ws.getCell('B4').value;
-    const detVal = ws.getCell('B5').value;
 
     let model;
     if (isMulti) {
@@ -100,22 +101,20 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
 
     if (inDate) model.date = inDate;
     model.location = (locVal ?? '').toString();
-    model.details  = (detVal ?? '').toString();
     if (!Array.isArray(model.photos)) model.photos = [];
 
-    // 基本欄の追加項目（Single/Multi共通、method は singleOnly）
-    for (let r = 7; r < 200; r++) {
+    // 基本欄（ラベルで取り込み）
+    let detailsSet = false;
+    // 5行目以降〜「追加項目」までスキャン（新レイアウト）
+    for (let r = 5; r < 220; r++) {
       const aText = String(ws.getCell(`A${r}`).value ?? '').trim();
       if (!aText) continue;
       if (aText === '追加項目') break;
       const v = ws.getCell(`B${r}`).value;
       const valStr = (v ?? '').toString().trim();
 
-      // ラベル一致で取り込み
       for (const f of CORE_EXTRA_FIELDS) {
-        if (f.singleOnly && isMulti) continue;
         if (aText === (f.label || f.key)) {
-          const valStr = (v ?? '').toString().trim();
           if (f.key === 'installType') {
             model.installType = /既設/.test(valStr) ? 'reuse' : 'new';
           } else if (f.key === 'diagramStatus') {
@@ -124,23 +123,31 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
             model.diagramNgReason = valStr;
           } else if (f.key === 'method') {
             model.method = valStr;
+          } else if (f.key === 'details') {
+            model.details = valStr;
+            detailsSet = true;
           }
           break;
         }
       }
     }
+    // 旧レイアウト互換（B5に調査内容がある場合の取り込み）
+    if (!detailsSet) {
+      const detVal = ws.getCell('B5').value;
+      if (detVal != null) model.details = (detVal ?? '').toString();
+    }
 
     // 追加項目の取り込み（既存ロジック）
     const schema = getSchemaFor(catName, isMulti ? 'multi' : 'single');
     let extraHeaderRow = null;
-    for (let r = 7; r < 200; r++) {
+    for (let r = 5; r < 220; r++) {
       const a = String(ws.getCell(`A${r}`).value ?? '').trim();
       if (a === '追加項目') { extraHeaderRow = r; break; }
     }
     if (extraHeaderRow != null) {
       let row = extraHeaderRow + 1;
       let emptyCount = 0;
-      const FORBIDDEN_KEYS = new Set(['date','location','details','photos','method','installType','diagramStatus','diagramNgReason']);
+      const FORBIDDEN_KEYS = new Set(['date','location','installType','method','diagramStatus','diagramNgReason','details','photos']);
       while (row < extraHeaderRow + 1 + 200) {
         const labelCell = ws.getCell(`A${row}`);
         const valueCell = ws.getCell(`B${row}`);
@@ -168,7 +175,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       }
     }
 
-    // 画像の取り込み（略：既存ロジック）
+    // 画像の取り込み（既存ロジック）
     if (typeof ws.getImages === 'function' && typeof wb.getImage === 'function') {
       const ROWS_PER_CAPTION = 11;
       const BLOCK_ROWS       = 11;
@@ -210,6 +217,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   });
 
+  // 隠しシート PHOTOS の取り込み（保険）
   const photosSheet = wb.getWorksheet('PHOTOS');
   if (photosSheet) {
     const lastRow = photosSheet.lastRow?.number || 0;
@@ -239,4 +247,3 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 }
-
