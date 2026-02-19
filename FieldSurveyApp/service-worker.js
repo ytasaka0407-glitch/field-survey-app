@@ -4,11 +4,13 @@ const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const PRECACHE_URLS = [
   './',
   './index.html',
-  './manifest.webmanifest',
+  './FieldSurveyApp/manifest.webmanifest',
   './lib/exceljs.min.js',
   './lib/FileSaver.min.js',
-  './icons/icon-192.png',
-  './icons/icon-512.png'
+  './FieldSurveyApp/assets/css/styles.css',
+  './FieldSurveyApp/assets/js/main.js',
+  './FieldSurveyApp/icons/icon-192.png',
+  './FieldSurveyApp/icons/icon-512.png'
 ];
 
 // Install: 必要ファイルを事前キャッシュ
@@ -64,4 +66,5 @@ self.addEventListener('fetch', (event) => {
         });
     })
   );
+
 });
