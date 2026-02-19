@@ -22,10 +22,9 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   ];
   // Single/Multi共通の基本欄追加
   const CORE_COMMON_EXTRA_FIELDS = [
-    { key: 'isReuse',    label: '新設/既設流用',  format: (v) => (v ? '既設流用' : '新設') },
-    { key: 'diagramOK',  label: '系統図との整合性', format: (v) => (v === false ? 'NG' : 'OK') },
+    { key: 'installType',   label: '新設/既設流用',    format: (v) => (v === 'reuse' ? '既設流用' : '新設') },
+    { key: 'diagramStatus', label: '系統図との整合性', format: (v) => (v === 'ng' ? 'NG' : 'OK') },
   ];
-
   const projectDateStr = projectDate || '';
   const exportDate     = new Date();
   const coverDate      = fromInputDate(projectDateStr) || exportDate;
@@ -137,7 +136,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       nextRow++;
     }
     // NG理由（diagramOKがfalseの時のみ）
-    if (entry.model.diagramOK === false) {
+    if (entry.model.diagramStatus === 'ng') {
       ws.getCell(`A${nextRow}`).value = 'NG理由';
       ws.getCell(`A${nextRow}`).style = labelStyle;
       ws.mergeCells(`B${nextRow}:J${nextRow}`);
@@ -149,7 +148,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
     // 追加項目（スキーマ定義に基づく。コア扱いのキーは除外）
     const schema = getSchemaFor(entry.cat, entry.type === 'multi' ? 'multi' : 'single');
-    const CORE_KEYS = new Set(['date','location','details','photos','method','isReuse','diagramOK','diagramNgReason']);
+    const CORE_KEYS = new Set(['date','location','details','photos','method','installType','diagramStatus','diagramNgReason']);
     const extraFields = schema.filter(f => !CORE_KEYS.has(f.key));
 
     if (extraFields.length) {
@@ -258,3 +257,4 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
+
