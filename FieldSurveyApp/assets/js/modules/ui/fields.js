@@ -3,9 +3,11 @@ import { readFileAsDataURL, resizeImage } from '../utils.js';
 
 function setNgReasonVisibility(container, model) {
   const el = container.querySelector('[data-field-key="diagramNgReason"]');
-  if (el) {
-    el.style.display = model.diagramStatus === 'ng' ? '' : 'none';
-  }
+  if (el) el.style.display = model.diagramStatus === 'ng' ? '' : 'none';
+}
+function setMethodVisibility(container, model) {
+  const el = container.querySelector('[data-field-key="method"]');
+  if (el) el.style.display = (model.installType === 'new') ? '' : 'none';
 }
 
 export const FieldRenderers = {
@@ -77,6 +79,8 @@ export const FieldRenderers = {
           model[field.key] = e.target.value;
           if (field.key === 'diagramStatus') {
             setNgReasonVisibility(container, model);
+          } else if (field.key === 'installType') {
+            setMethodVisibility(container, model);
           }
         }
       });
@@ -154,9 +158,11 @@ export function renderField(container, model, field, fid) {
   const fn = FieldRenderers[field.type];
   if (!fn) return;
   fn(container, model, field, fid);
-  // 初期表示時の NG理由の表示制御
+  // 初期表示時の表示制御
   if (field.key === 'diagramStatus' || field.key === 'diagramNgReason') {
     setNgReasonVisibility(container, model);
   }
+  if (field.key === 'installType' || field.key === 'method') {
+    setMethodVisibility(container, model);
+  }
 }
-
