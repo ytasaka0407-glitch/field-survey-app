@@ -50,6 +50,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   wsToc.getCell('A1').value = '目次';
   wsToc.getCell('A1').style = sectionTitleStyle;
 
+  // 選択カテゴリからエントリ生成
   const cats = [...selectedCategories];
   const selectedSingles = cats.filter(c => (dataMap[c]?.mode || 'single') === 'single');
   const selectedMultis  = cats.filter(c => (dataMap[c]?.mode) === 'multi');
@@ -68,6 +69,30 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     }
   }
 
+  // 若番順（先頭の「NN.」数値で昇順）→ 同値はカテゴリ名の五十音 → マルチは基地局の並び
+  const stationOrder = new Map(sharedStations.map((s, i) => [s.id, i]));
+  const leadingNum = (name) => {
+    const m = /^(\d+)\./.exec(name || '');
+    return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
+  };
+  entries.sort((a, b) => {
+    const na = leadingNum(a.cat);
+    const nb = leadingNum(b.cat);
+    if (na !== nb) return na - nb;
+    const byName = a.cat.localeCompare(b.cat, 'ja');
+    if (byName !== 0) return byName;
+    // 同じカテゴリ内の並び（single優先 → multi、その後基地局順）
+    if (a.type !== b.type) return a.type === 'single' ? -1 : 1;
+    if (a.type === 'multi' && b.type === 'multi') {
+      const ia = stationOrder.has(a.stationId) ? stationOrder.get(a.stationId) : 1e9;
+      const ib = stationOrder.has(b.stationId) ? stationOrder.get(b.stationId) : 1e9;
+      if (ia !== ib) return ia - ib;
+      return (a.stationName || '').localeCompare(b.stationName || '', 'ja');
+    }
+    return 0;
+  });
+
+  // シート名をユニークに生成（ソート後に実施）
   const usedNames = new Set();
   for (const e of entries) {
     const base = e.type === 'single' ? sanitizeSheetName(e.cat) : sanitizeSheetName(`${e.cat} - ${e.stationName}`);
@@ -76,7 +101,6 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   }
 
   const colLetterToIndex = (L) => L.charCodeAt(0) - 65;
-
   function applyBottomBorderRange(ws, startCol, endCol, row) {
     for (let c = startCol; c <= endCol; c++) {
       ws.getCell(row, c).border = { bottom: borderThin };
@@ -296,11 +320,12 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     }
   }
 
+  // カテゴリシートを若番順に追加
   for (const e of entries) {
     await addOneEntrySheet(e);
   }
 
-  // 目次
+  // 目次（若番順で作成）
   let tocRow = 3;
   for (const e of entries) {
     wsToc.getCell(`A${tocRow}`).value = { text: e.displayLabel, hyperlink: `#'${e.sheetName}'!A1` };
@@ -311,7 +336,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     tocRow++;
   }
 
-  // PHOTOS シート（新フォーマット）を書き出し
+  // PHOTOS シート（新フォーマット）を書き出し（最後に追加）
   // ['type','sheetName','category','station','fileName','caption','imgCol','imgRowStart']
   const wsPhotos = wb.addWorksheet('PHOTOS');
   wsPhotos.getColumn(1).width = 10;
