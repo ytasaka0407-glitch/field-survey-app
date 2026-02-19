@@ -16,15 +16,6 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const linkStyle         = { font: { color: { argb: 'FF1F4E79' }, underline: true, name: 'Meiryo UI' } };
   const borderThin        = { style: 'thin', color: { argb: 'FF999999' } };
 
-  // 単一カテゴリの“基本欄”として上部に出力したい追加項目
-  const CORE_SINGLE_EXTRA_FIELDS = [
-    { key: 'method', label: '設置方法' },
-  ];
-  // Single/Multi共通の基本欄追加
-  const CORE_COMMON_EXTRA_FIELDS = [
-    { key: 'installType',   label: '新設/既設流用',    format: (v) => (v === 'reuse' ? '既設流用' : '新設') },
-    { key: 'diagramStatus', label: '系統図との整合性', format: (v) => (v === 'ng' ? 'NG' : 'OK') },
-  ];
   const projectDateStr = projectDate || '';
   const exportDate     = new Date();
   const coverDate      = fromInputDate(projectDateStr) || exportDate;
@@ -94,7 +85,8 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.getCell('A1').value = entry.displayLabel;
     ws.getCell('A1').style = sectionTitleStyle;
 
-    // 基本項目（既存3項目）
+    // 基本項目（並び: 調査日, 設置場所, 新設/既設, 設置方法(新設時), OK/NG, NG理由(NG時), その他調査内容）
+    // 調査日
     ws.getCell('A3').value = '調査日'; ws.getCell('A3').style = labelStyle;
     const d = fromInputDate(entry.model.date || projectDateStr);
     if (d) { ws.getCell('B3').value = d; ws.getCell('B3').numFmt = 'yyyy/mm/dd'; }
@@ -102,40 +94,41 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     ws.getCell('B3').font = { name: 'Meiryo UI' };
     ws.getCell('B3').alignment = { horizontal: 'left' };
 
+    // 設置場所
     ws.getCell('A4').value = '設置場所'; ws.getCell('A4').style = labelStyle;
     ws.mergeCells('B4:J4'); ws.getCell('B4').value = entry.model.location || '-';
     ws.getCell('B4').font  = { name: 'Meiryo UI' };
 
-    ws.getCell('A5').value = '調査内容'; ws.getCell('A5').style = labelStyle;
-    ws.mergeCells('B5:J6');
-    ws.getCell('B5').value     = (entry.model.details || '').replace(/\r?\n/g, '\n');
-    ws.getCell('B5').alignment = { wrapText: true, vertical: 'top' };
-    ws.getCell('B5').font      = { name: 'Meiryo UI' };
+    // 以降の基本項目
+    let nextRow = 5;
 
-    ws.getCell('A3').border = { bottom: borderThin };
-    ws.getCell('A4').border = { bottom: borderThin };
-    ws.getCell('A5').border = { bottom: borderThin };
-    ws.getCell('B3').border = { bottom: borderThin };
-    ws.getCell('B4').border = { bottom: borderThin };
-    ws.getCell('B5').border = { bottom: borderThin };
+    // 新設/既設流用
+    ws.getCell(`A${nextRow}`).value = '新設/既設流用';
+    ws.getCell(`A${nextRow}`).style = labelStyle;
+    ws.mergeCells(`B${nextRow}:J${nextRow}`);
+    ws.getCell(`B${nextRow}`).value = (entry.model.installType === 'reuse') ? '既設流用' : '新設';
+    ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
+    nextRow++;
 
-    // 基本欄追加（共通）
-    let nextRow = 7;
-    const coreExtras = [
-      ...CORE_COMMON_EXTRA_FIELDS,
-      ...(entry.type === 'single' ? CORE_SINGLE_EXTRA_FIELDS : []),
-    ];
-    for (const f of coreExtras) {
-      ws.getCell(`A${nextRow}`).value = f.label;
+    // 設置方法（新設時のみ）
+    if (entry.model.installType === 'new') {
+      ws.getCell(`A${nextRow}`).value = '設置方法';
       ws.getCell(`A${nextRow}`).style = labelStyle;
       ws.mergeCells(`B${nextRow}:J${nextRow}`);
-      const raw = entry.model[f.key];
-      const val = f.format ? f.format(raw) : (raw ?? '').toString();
-      ws.getCell(`B${nextRow}`).value = val || '-';
+      ws.getCell(`B${nextRow}`).value = (entry.model.method ?? '').toString() || '-';
       ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
       nextRow++;
     }
-    // NG理由（diagramOKがfalseの時のみ）
+
+    // 系統図との整合性（OK/NG）
+    ws.getCell(`A${nextRow}`).value = '系統図との整合性';
+    ws.getCell(`A${nextRow}`).style = labelStyle;
+    ws.mergeCells(`B${nextRow}:J${nextRow}`);
+    ws.getCell(`B${nextRow}`).value = (entry.model.diagramStatus === 'ng') ? 'NG' : 'OK';
+    ws.getCell(`B${nextRow}`).font = { name: 'Meiryo UI' };
+    nextRow++;
+
+    // NG理由（NG時のみ）
     if (entry.model.diagramStatus === 'ng') {
       ws.getCell(`A${nextRow}`).value = 'NG理由';
       ws.getCell(`A${nextRow}`).style = labelStyle;
@@ -146,9 +139,24 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       nextRow++;
     }
 
+    // その他調査内容（1〜2行分の高さを確保）
+    ws.getCell(`A${nextRow}`).value = 'その他調査内容';
+    ws.getCell(`A${nextRow}`).style = labelStyle;
+    ws.mergeCells(`B${nextRow}:J${nextRow+1}`);
+    ws.getCell(`B${nextRow}`).value     = (entry.model.details || '').replace(/\r?\n/g, '\n');
+    ws.getCell(`B${nextRow}`).alignment = { wrapText: true, vertical: 'top' };
+    ws.getCell(`B${nextRow}`).font      = { name: 'Meiryo UI' };
+    ws.getRow(nextRow).height = 22;
+    ws.getRow(nextRow+1).height = 22;
+    nextRow += 2;
+
+    // 区切り線（任意）
+    ['A3','A4',`A${nextRow-2}`].forEach(addr => ws.getCell(addr).border = { bottom: borderThin });
+    ['B3','B4',`B${nextRow-2}`].forEach(addr => ws.getCell(addr).border = { bottom: borderThin });
+
     // 追加項目（スキーマ定義に基づく。コア扱いのキーは除外）
     const schema = getSchemaFor(entry.cat, entry.type === 'multi' ? 'multi' : 'single');
-    const CORE_KEYS = new Set(['date','location','details','photos','method','installType','diagramStatus','diagramNgReason']);
+    const CORE_KEYS = new Set(['date','location','installType','method','diagramStatus','diagramNgReason','details','photos']);
     const extraFields = schema.filter(f => !CORE_KEYS.has(f.key));
 
     if (extraFields.length) {
@@ -182,6 +190,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     const ROW_HEIGHT_PT = 24;
     const BLOCK_ROWS    = 11;
 
+    const colLetterToIndex = (L) => L.charCodeAt(0) - 65;
     const colPixels = (colIdx) => (ws.getColumn(colIdx+1).width || 10) * 7;
     const rowPixels = (rowIdx) => (ws.getRow(rowIdx).height || 18) * 1.333;
     const sumColPixels = (letters) =>
@@ -235,10 +244,12 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
       startRow += (BLOCK_ROWS + 2);
     }
   }
+
   for (const e of entries) {
     await addOneEntrySheet(e);
   }
 
+  // 目次
   let tocRow = 3;
   for (const e of entries) {
     wsToc.getCell(`A${tocRow}`).value = { text: e.displayLabel, hyperlink: `#'${e.sheetName}'!A1` };
@@ -257,4 +268,3 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   const fileName = `${safeNamePart}.xlsx`;
   window.saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName);
 }
-
