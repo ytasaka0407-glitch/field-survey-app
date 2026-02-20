@@ -73,7 +73,7 @@ export function readFileAsDataURL(file) {
     reader.readAsDataURL(file);
   });
 }
-export function resizeImage(dataUrl, maxWidth) {
+export function resizeImage(dataUrl, maxWidth = 1024, quality = 0.8) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
@@ -86,7 +86,7 @@ export function resizeImage(dataUrl, maxWidth) {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
-      const out = canvas.toDataURL("image/jpeg", 0.85);
+      const out = canvas.toDataURL("image/jpeg", quality);
       resolve(out);
     };
     img.src = dataUrl;
@@ -94,4 +94,5 @@ export function resizeImage(dataUrl, maxWidth) {
 }
 export function stationIdFromName(name) {
   return "st_" + hashId((name || "").trim().toLowerCase());
+
 }
