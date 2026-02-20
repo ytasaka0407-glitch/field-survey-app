@@ -41,9 +41,8 @@ function bufferToDataUrl(buffer, extension) {
   return `data:${mime};base64,${base64}`;
 }
 
-// G列の「結合セルマスター」からキャプションを安全に取得する
+// G列の結合セル（マスター）からキャプションを安全に取得
 function readCaptionFromSheet(ws, startRow, blockRows = 11) {
-  // 1) まず startRow の Gセルから（結合マスターなら master へ）
   const direct = ws.getCell(`G${startRow}`);
   let master = direct;
   try {
@@ -52,7 +51,6 @@ function readCaptionFromSheet(ws, startRow, blockRows = 11) {
   let t = cellToPlainText(master?.value).trim();
   if (t) return t.replace(/\r\n?/g, '\n');
 
-  // 2) 見つからない場合、ブロック内（startRow..startRow+blockRows-1）を探索して、値を持つ結合マスターを拾う
   for (let r = startRow; r < startRow + blockRows; r++) {
     const c = ws.getCell(`G${r}`);
     let m = c;
@@ -62,8 +60,6 @@ function readCaptionFromSheet(ws, startRow, blockRows = 11) {
     const tt = cellToPlainText(m?.value).trim();
     if (tt) return tt.replace(/\r\n?/g, '\n');
   }
-
-  // 3) ダメなら空文字
   return '';
 }
 
@@ -161,7 +157,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         if (!photosByKey.has(key)) photosByKey.set(key, []);
         photosByKey.get(key).push(rec);
       } else if (isManifestFormat) {
-        const type       = String(photosSheet.getCell(`A${r`).value ?? '').trim();
+        const type       = String(photosSheet.getCell(`A${r}`).value ?? '').trim();  // ← 修正済み
         const sheetName  = String(photosSheet.getCell(`B${r}`).value ?? '').trim();
         const category   = String(photosSheet.getCell(`C${r}`).value ?? '').trim();
         const station    = String(photosSheet.getCell(`D${r}`).value ?? '').trim();
@@ -424,7 +420,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         let start = Math.max(tlRow0 + 1, MIN_CAPTION_ROW);
         const end = Math.min(start + ROWS_PER_CAPTION - 1, lastRow);
 
-        // 近傍でG列の「結合マスター」を探す
+        // 近傍でG列の結合マスターを探す
         const OFFSETS = [-2, -1, 0, 1, 2, 3, 4];
         for (const off of OFFSETS) {
           const r = tlRow0 + 1 + off;
