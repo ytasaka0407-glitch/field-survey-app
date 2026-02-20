@@ -1,4 +1,5 @@
-const CACHE_VERSION = 'v4';
+// FieldSurveyApp/service-worker.js
+const CACHE_VERSION = 'v5'; // v4 -> v5 に更新
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -9,6 +10,17 @@ const PRECACHE_URLS = [
   './lib/FileSaver.min.js',
   './FieldSurveyApp/assets/css/styles.css',
   './FieldSurveyApp/assets/js/main.js',
+  './FieldSurveyApp/assets/js/app.js',
+  './FieldSurveyApp/assets/js/modules/pwa.js',
+  './FieldSurveyApp/assets/js/modules/state.js',
+  './FieldSurveyApp/assets/js/modules/storage.js',
+  './FieldSurveyApp/assets/js/modules/utils.js',
+  './FieldSurveyApp/assets/js/modules/excel/export.js',
+  './FieldSurveyApp/assets/js/modules/excel/import.js',
+  './FieldSurveyApp/assets/js/modules/ui/blocks.js',
+  './FieldSurveyApp/assets/js/modules/ui/categories.js',
+  './FieldSurveyApp/assets/js/modules/ui/fields.js',
+  './FieldSurveyApp/assets/js/modules/ui/schemas.js',
   './FieldSurveyApp/icons/icon-192.png',
   './FieldSurveyApp/icons/icon-512.png'
 ];
@@ -53,7 +65,6 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       return fetch(req)
         .then((res) => {
-          // GET & 200系のみキャッシュ
           if (req.method === 'GET' && res && (res.status === 200 || res.type === 'opaque')) {
             const copy = res.clone();
             caches.open(STATIC_CACHE).then((cache) => cache.put(req, copy));
@@ -61,12 +72,8 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() => {
-          // オフライン時のフォールバック（必要なら画像等に代替を返す）
           return caches.match(req);
         });
     })
   );
-
 });
-
-
