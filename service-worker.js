@@ -1,6 +1,6 @@
 // service-worker.js (root)
 // scope: https://<ユーザー名>.github.io/field-survey-app/
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_PATHS = [
@@ -24,6 +24,7 @@ const PRECACHE_PATHS = [
   './FieldSurveyApp/assets/js/modules/ui/schemas.js',
   './FieldSurveyApp/icons/icon-192.png',
   './FieldSurveyApp/icons/icon-512.png',
+  './FieldSurveyApp/assets/js/modules/idb-photos.js',
 ];
 
 async function safePrecache() {
