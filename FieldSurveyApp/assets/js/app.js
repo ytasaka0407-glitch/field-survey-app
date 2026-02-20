@@ -1,7 +1,7 @@
 import { initDefaults, dataMap, selectedCategories, sharedStations, setSharedStations, setProjectDatePrev, ensureSingle, ensureMulti, getOrInitStationData } from './modules/state.js';
 import { initCategoryUI } from './modules/ui/categories.js';
 import { initBlocksUI } from './modules/ui/blocks.js';
-import { saveDraft, loadDraft, migrateSharedStationsFromLegacy } from './modules/storage.js';
+import { saveDraft, loadDraft, migrateSharedStationsFromLegacy, hydratePhotosFromIDB } from './modules/storage.js';
 import { exportToExcel } from './modules/excel/export.js';
 import { importFromExcel } from './modules/excel/import.js';
 
@@ -77,18 +77,18 @@ export function bootstrapApp() {
   blocks.renderCategories();
 
   // 保存/読込
-  saveBtn.addEventListener("click", () => {
-    saveDraft(projectTitleEl.value || "", projectDateEl.value || "");
+  saveBtn.addEventListener("click", async () => {
+    await saveDraft(projectTitleEl.value || "", projectDateEl.value || "");
     alert("下書きを保存しました");
   });
-  loadBtn.addEventListener("click", () => {
+  loadBtn.addEventListener("click", async () => {
     const payload = loadDraft();
     if (!payload) { alert("保存された下書きがありません"); return; }
     try {
       projectTitleEl.value = payload.projectTitle || "";
       projectDateEl.value  = payload.projectDate || "";
       setProjectDatePrev(payload.projectDate || "");
-
+  
       Object.keys(dataMap).forEach((k) => delete dataMap[k]);
       Object.assign(dataMap, payload.data || {});
       if (payload.sharedStations && Array.isArray(payload.sharedStations)) {
@@ -98,11 +98,15 @@ export function bootstrapApp() {
       }
       selectedCategories.clear();
       (payload.selected || []).forEach((c) => selectedCategories.add(c));
-
+  
+      // 写真のdataUrlをIndexedDBから復元
+      await hydratePhotosFromIDB();
+  
       catUI.renderCategorySelector();
       blocks.renderCategories();
       alert("下書きを読み込みました");
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("読み込みに失敗しました");
     }
   });
@@ -128,3 +132,4 @@ export function bootstrapApp() {
   });
 
 }
+
