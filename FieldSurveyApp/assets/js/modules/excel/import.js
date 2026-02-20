@@ -28,7 +28,7 @@ function cellToPlainText(val) {
   try { return String(val); } catch { return ''; }
 }
 
-// フォールバック用（PHOTOSが無い古いファイル向け）
+// フォールバック用（PHOTOSが無い古いファイル向け／画像埋め込みから dataUrl を生成）
 function bufferToDataUrl(buffer, extension) {
   const mime = extension === 'png' ? 'image/png' : 'image/jpeg';
   const u8 = (buffer instanceof Uint8Array) ? buffer : new Uint8Array(buffer);
@@ -83,19 +83,29 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
     }
   }
 
-  // PHOTOS 読み込み（新/旧対応）
+  // PHOTOS 読み込み（新/旧/マニフェストのみ対応）
   // 新: ['recordId','type','sheetName','category','station','fileName','caption','imgCol','imgRowStart']
   // 旧: ['type','category','station','fileName','caption','dataUrl']
+  // マニフェストのみ（本アプリのエクスポート）: ['type','sheetName','category','station','fileName','caption','imgCol','imgRowStart']
   const photosSheet = wb.getWorksheet('PHOTOS');
-  const photosBySheet = new Map();      // sheetName -> [{ type, category, station, name, caption, dataUrl, imgRowStart }]
+  const photosBySheet = new Map();      // sheetName -> [{ type, category, station, name, caption, dataUrl, imgRowStart, recordId? }]
   const photosByKey = new Map();        // `${type}|${category}|${station}` -> [{...}] （旧フォーマット用）
 
   if (photosSheet) {
     const hA1 = String(photosSheet.getCell('A1').value ?? '').trim().toLowerCase();
     const hB1 = String(photosSheet.getCell('B1').value ?? '').trim().toLowerCase();
+    const hC1 = String(photosSheet.getCell('C1').value ?? '').trim().toLowerCase();
+    const hD1 = String(photosSheet.getCell('D1').value ?? '').trim().toLowerCase();
+    const hE1 = String(photosSheet.getCell('E1').value ?? '').trim().toLowerCase();
     const hF1 = String(photosSheet.getCell('F1').value ?? '').trim().toLowerCase();
-    const isNewFormat = (hA1 === 'recordid' && hB1 === 'type');
-    const isOldFormat = (hA1 === 'type' && hF1 === 'dataurl');
+    const hG1 = String(photosSheet.getCell('G1').value ?? '').trim().toLowerCase();
+    const hH1 = String(photosSheet.getCell('H1').value ?? '').trim().toLowerCase();
+    const hI1 = String(photosSheet.getCell('I1').value ?? '').trim().toLowerCase();
+
+    const isNewFormat       = (hA1 === 'recordid' && hB1 === 'type');
+    const isOldFormat       = (hA1 === 'type' && hF1 === 'dataurl');
+    const isManifestFormat  = (hA1 === 'type' && hB1 === 'sheetname' && hC1 === 'category' && hD1 === 'station' &&
+                               hE1 === 'filename' && hF1 === 'caption' && hG1 === 'imgcol' && hH1 === 'imgrowstart');
 
     const lastRow = photosSheet.lastRow?.number || 0;
     for (let r = 2; r <= lastRow; r++) {
@@ -110,7 +120,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         const imgRowRaw  = photosSheet.getCell(`I${r}`).value;
         const imgRowStart = Number(imgRowRaw || 0);
         const dataUrl    = recordId ? (photoDataMap.get(recordId) || '') : '';
-        const rec = { type, category, station, name: fileName, caption, dataUrl, imgRowStart };
+        const rec = { type, category, station, name: fileName, caption, dataUrl, imgRowStart, recordId };
         if (!photosBySheet.has(sheetName)) photosBySheet.set(sheetName, []);
         photosBySheet.get(sheetName).push(rec);
       } else if (isOldFormat) {
@@ -124,6 +134,18 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         const rec = { type, category, station, name: fileName, caption, dataUrl, imgRowStart: 0 };
         if (!photosByKey.has(key)) photosByKey.set(key, []);
         photosByKey.get(key).push(rec);
+      } else if (isManifestFormat) {
+        const type       = String(photosSheet.getCell(`A${r}`).value ?? '').trim();
+        const sheetName  = String(photosSheet.getCell(`B${r}`).value ?? '').trim();
+        const category   = String(photosSheet.getCell(`C${r}`).value ?? '').trim();
+        const station    = String(photosSheet.getCell(`D${r}`).value ?? '').trim();
+        const fileName   = String(photosSheet.getCell(`E${r}`).value ?? '').trim();
+        const caption    = String(photosSheet.getCell(`F${r}`).value ?? '').trim();
+        const imgRowRaw  = photosSheet.getCell(`H${r}`).value;
+        const imgRowStart = Number(imgRowRaw || 0);
+        const rec = { type, category, station, name: fileName, caption, dataUrl: '', imgRowStart };
+        if (!photosBySheet.has(sheetName)) photosBySheet.set(sheetName, []);
+        photosBySheet.get(sheetName).push(rec);
       }
     }
   }
@@ -245,10 +267,10 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       }
     }
 
-    // 写真（優先順: PHOTOS新方式 → PHOTOS旧方式 → フォールバック）
+    // 写真（優先順: PHOTOS（新/マニフェスト）×画像埋め込み対応 → PHOTOS旧方式 → フォールバック）
     let sheetPhotosApplied = false;
 
-    // PHOTOS（新方式）：行→キャプションを一括マッピングしてから、各写真に独立適用
+    // PHOTOS（新/マニフェスト）＋シート画像埋め込みとの突き合わせ
     if (photosBySheet.has(sheetName)) {
       const allRecs = photosBySheet.get(sheetName);
       const recs = allRecs.filter(rec =>
@@ -258,40 +280,57 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       );
 
       if (recs.length) {
-        // ユニーク行を抽出（imgRowStart）
-        const uniqueRows = Array.from(
-          new Set(
-            recs.map(r => Number(r.imgRowStart || 0)).filter(n => Number.isFinite(n) && n > 0)
-          )
-        );
+        // 行番号 -> マニフェスト記録（複数想定で配列）
+        const recsByRow = new Map();
+        for (const rec of recs) {
+          const row = Number(rec.imgRowStart || 0);
+          if (row > 0) {
+            if (!recsByRow.has(row)) recsByRow.set(row, []);
+            recsByRow.get(row).push(rec);
+          }
+        }
 
-        // G列 {row} をまとめて読み、row→caption（Gセルの値）のマップを作成
+        // G列のキャプションをまとめて取得（行→キャプション）
         const captionByRow = new Map();
-        for (const row of uniqueRows) {
+        for (const row of recsByRow.keys()) {
           const v = ws.getCell(`G${row}`).value;
           const t = cellToPlainText(v).trim();
           captionByRow.set(row, t ? t.replace(/\r\n?/g, '\n') : '');
         }
 
-        // 各写真に対して独立にキャプションを決定（Gセル優先、空ならPHOTOSのcaption）
-        for (const rec of recs) {
-          const row = Number(rec.imgRowStart || 0);
+        // シートの画像埋め込みを走査し、tl.row から行開始を推定してマニフェストとマッチング
+        let images = (typeof ws.getImages === 'function') ? ws.getImages() : [];
+        images = Array.isArray(images) ? images.slice() : [];
+        images.sort((a, b) => ((Math.floor(a.tl?.row ?? 0)) - (Math.floor(b.tl?.row ?? 0))));
+
+        for (const meta of images) {
+          const imageObj = (typeof wb.getImage === 'function') ? wb.getImage(meta.imageId) : null;
+          if (!imageObj || !imageObj.buffer) continue;
+
+          // export 側で tl.row は (startRow - 1)。ここで +1 して一致を試みる
+          const tlRow0 = Math.floor(meta.tl?.row ?? 0);
+          const rowStart = tlRow0 + 1;
+
+          const recList = recsByRow.get(rowStart);
+          if (!recList || !recList.length) continue;
+
+          // 1行1画像想定。複数あっても最初を採用
+          const rec = recList.shift();
+
+          // キャプションは Gセル優先、空ならマニフェストの caption
           let caption = '';
+          const gCap = captionByRow.get(rowStart) || '';
+          caption = gCap || rec.caption || '';
 
-          if (row > 0 && captionByRow.has(row) && captionByRow.get(row)) {
-            caption = captionByRow.get(row);
-          } else {
-            caption = rec.caption || '';
-          }
-
-          // NG理由との取り違え安全弁：完全一致ならPHOTOSのcaptionを優先
+          // NG理由との取り違え安全弁
           if (caption && model.diagramNgReason && caption === model.diagramNgReason && rec.caption) {
             caption = rec.caption;
           }
 
+          const dataUrl = bufferToDataUrl(imageObj.buffer, imageObj.extension);
           model.photos.push({
-            dataUrl: rec.dataUrl || '',
-            name: rec.name || rec.fileName || '',
+            dataUrl,
+            name: rec.name || '',
             caption
           });
         }
@@ -308,7 +347,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         for (const rec of recs) {
           model.photos.push({
             dataUrl: rec.dataUrl || '',
-            name: rec.name || rec.fileName || '',
+            name: rec.name || '',
             caption: rec.caption || ''
           });
         }
@@ -316,7 +355,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       }
     }
 
-    // フォールバック（PHOTOSが無い古いファイルのみ）
+    // フォールバック（PHOTOSが無い or 非対応フォーマット）: シート内画像と G列結合キャプションから再構築
     if (!sheetPhotosApplied && typeof ws.getImages === 'function' && typeof wb.getImage === 'function') {
       const DESC_COL = 'G';
       const ROWS_PER_CAPTION = 11;
