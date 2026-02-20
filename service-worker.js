@@ -1,8 +1,8 @@
 // service-worker.js (root)
-// scope: https://<ユーザー名>.github.io/field-survey-app/
 const CACHE_VERSION = 'v8';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
+// サイトルート基準のパスを列挙（存在しないものは取り除いてOK）
 const PRECACHE_PATHS = [
   './',
   './index.html',
@@ -22,15 +22,17 @@ const PRECACHE_PATHS = [
   './FieldSurveyApp/assets/js/modules/ui/categories.js',
   './FieldSurveyApp/assets/js/modules/ui/fields.js',
   './FieldSurveyApp/assets/js/modules/ui/schemas.js',
+  './FieldSurveyApp/assets/js/modules/idb-photos.js', // IndexedDB ヘルパー（導入済みなら）
   './FieldSurveyApp/icons/icon-192.png',
   './FieldSurveyApp/icons/icon-512.png',
-  './FieldSurveyApp/assets/js/modules/idb-photos.js',
 ];
 
+// 404をスキップする安全なプリキャッシュ
 async function safePrecache() {
   const cache = await caches.open(STATIC_CACHE);
-  const base = self.registration.scope;
-  const urls = PRECACHE_PATHS.map(p => new URL(p, base).href);
+  const base = self.registration.scope; // 例: https://<user>.github.io/field-survey-app/
+  const urls = PRECACHE_PATHS.map((p) => new URL(p, base).href);
+
   await Promise.all(
     urls.map(async (url) => {
       try {
@@ -47,11 +49,12 @@ async function safePrecache() {
   );
 }
 
+// Install: プリキャッシュ（skipWaitingはここではしない→ユーザー確認で適用）
 self.addEventListener('install', (event) => {
   event.waitUntil(safePrecache());
-  self.skipWaiting();
 });
 
+// Activate: 古いキャッシュ削除＋即時制御開始
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -61,14 +64,21 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Fetch: ナビゲーションはネット優先→失敗時index.html、静的はキャッシュ優先
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+
+  // ページ遷移（HTML）
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(() => caches.match(new URL('./index.html', self.registration.scope).href))
+      fetch(req).catch(() =>
+        caches.match(new URL('./index.html', self.registration.scope).href)
+      )
     );
     return;
   }
+
+  // 静的ファイル
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
@@ -82,4 +92,11 @@ self.addEventListener('fetch', (event) => {
         .catch(() => caches.match(req));
     })
   );
+});
+
+// メッセージ（UIからのSKIP_WAITING指示を受けて即時更新）
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
