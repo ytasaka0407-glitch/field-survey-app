@@ -141,7 +141,7 @@ export const FieldRenderers = {
       for (const file of fileList) {
         if (!file.type.startsWith('image/')) continue;
         const dataUrl = await readFileAsDataURL(file);
-        const resized = await resizeImage(dataUrl, 1280);
+        const resized = await resizeImage(dataUrl, 1024, 0.8);
         model[key].push({ dataUrl: resized, name: file.name, caption: '' });
       }
       renderPhotoList();
@@ -166,3 +166,4 @@ export function renderField(container, model, field, fid) {
     setMethodVisibility(container, model);
   }
 }
+
