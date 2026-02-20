@@ -1,6 +1,6 @@
 // service-worker.js (root)
 // scope: https://<ユーザー名>.github.io/field-survey-app/
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 const PRECACHE_PATHS = [
