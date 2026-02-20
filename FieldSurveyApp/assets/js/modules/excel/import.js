@@ -267,72 +267,78 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       }
     }
 
-    // 写真（優先順: PHOTOS（新/マニフェスト）×画像埋め込み対応 → PHOTOS旧方式 → フォールバック）
+    // 写真（優先順: PHOTOS（新/マニフェスト）×シート画像突合 → PHOTOS旧方式 → 画像フォールバック）
     let sheetPhotosApplied = false;
 
-    // PHOTOS（新/マニフェスト）＋シート画像埋め込みとの突き合わせ
+    // PHOTOS（新/マニフェスト）＋シートの埋め込み画像を「行開始」で1対1突き合わせ
     if (photosBySheet.has(sheetName)) {
       const allRecs = photosBySheet.get(sheetName);
-      const recs = allRecs.filter(rec =>
-        rec.type === (isMulti ? 'multi' : 'single') &&
-        rec.category === catName &&
-        (isMulti ? (rec.station === (stationName || '')) : true)
-      );
+      const recs = allRecs
+        .filter(rec =>
+          rec.type === (isMulti ? 'multi' : 'single') &&
+          rec.category === catName &&
+          (isMulti ? (rec.station === (stationName || '')) : true)
+        )
+        .filter(rec => Number.isFinite(Number(rec.imgRowStart)) && Number(rec.imgRowStart) > 0)
+        .map(rec => ({ ...rec, imgRowStart: Number(rec.imgRowStart) }))
+        .sort((a, b) => a.imgRowStart - b.imgRowStart);
 
       if (recs.length) {
-        // 行番号 -> マニフェスト記録（複数想定で配列）
-        const recsByRow = new Map();
-        for (const rec of recs) {
-          const row = Number(rec.imgRowStart || 0);
-          if (row > 0) {
-            if (!recsByRow.has(row)) recsByRow.set(row, []);
-            recsByRow.get(row).push(rec);
-          }
-        }
-
-        // G列のキャプションをまとめて取得（行→キャプション）
+        // G列のキャプション（行 → caption）を事前取得
         const captionByRow = new Map();
-        for (const row of recsByRow.keys()) {
-          const v = ws.getCell(`G${row}`).value;
+        for (const rec of recs) {
+          const v = ws.getCell(`G${rec.imgRowStart}`).value;
           const t = cellToPlainText(v).trim();
-          captionByRow.set(row, t ? t.replace(/\r\n?/g, '\n') : '');
+          captionByRow.set(rec.imgRowStart, t ? t.replace(/\r\n?/g, '\n') : '');
         }
 
-        // シートの画像埋め込みを走査し、tl.row から行開始を推定してマニフェストとマッチング
+        // シートの画像埋め込み一覧（位置取得）
         let images = (typeof ws.getImages === 'function') ? ws.getImages() : [];
         images = Array.isArray(images) ? images.slice() : [];
-        images.sort((a, b) => ((Math.floor(a.tl?.row ?? 0)) - (Math.floor(b.tl?.row ?? 0))));
-
-        for (const meta of images) {
+        // 画像ごとに「推定開始行」を計算
+        const imgPool = images.map(meta => {
           const imageObj = (typeof wb.getImage === 'function') ? wb.getImage(meta.imageId) : null;
-          if (!imageObj || !imageObj.buffer) continue;
+          if (!imageObj || !imageObj.buffer) return null;
+          const tlRow0 = Math.floor(meta.tl?.row ?? 0); // 0-based
+          const approxStartRow = tlRow0 + 1;            // 1-based
+          return { meta, imageObj, approxStartRow, used: false };
+        }).filter(Boolean);
 
-          // export 側で tl.row は (startRow - 1)。ここで +1 して一致を試みる
-          const tlRow0 = Math.floor(meta.tl?.row ?? 0);
-          const rowStart = tlRow0 + 1;
+        // 許容ウィンドウ（エクスポート側は 1枚あたり 11 行確保）
+        const MATCH_WINDOW = 12; // 行幅の許容（開始行〜+11 付近）
+        const candidatesInWindow = (imgRow, recRow) =>
+          imgRow >= recRow && imgRow <= (recRow + MATCH_WINDOW - 1);
 
-          const recList = recsByRow.get(rowStart);
-          if (!recList || !recList.length) continue;
+        for (const rec of recs) {
+          // rec.imgRowStart と最も近い未使用画像を選ぶ（同じブロック内優先）
+          let bestIdx = -1;
+          let bestDist = Number.POSITIVE_INFINITY;
 
-          // 1行1画像想定。複数あっても最初を採用
-          const rec = recList.shift();
-
-          // キャプションは Gセル優先、空ならマニフェストの caption
-          let caption = '';
-          const gCap = captionByRow.get(rowStart) || '';
-          caption = gCap || rec.caption || '';
-
-          // NG理由との取り違え安全弁
-          if (caption && model.diagramNgReason && caption === model.diagramNgReason && rec.caption) {
-            caption = rec.caption;
+          for (let i = 0; i < imgPool.length; i++) {
+            const it = imgPool[i];
+            if (it.used) continue;
+            if (!candidatesInWindow(it.approxStartRow, rec.imgRowStart)) continue;
+            const dist = Math.abs(it.approxStartRow - rec.imgRowStart);
+            if (dist < bestDist) { bestDist = dist; bestIdx = i; }
           }
 
-          const dataUrl = bufferToDataUrl(imageObj.buffer, imageObj.extension);
-          model.photos.push({
-            dataUrl,
-            name: rec.name || '',
-            caption
-          });
+          if (bestIdx >= 0) {
+            const it = imgPool[bestIdx];
+            it.used = true;
+
+            // キャプション: Gセル優先、空ならPHOTOSのcaption
+            let caption = captionByRow.get(rec.imgRowStart) || rec.caption || '';
+            if (caption && model.diagramNgReason && caption === model.diagramNgReason && rec.caption) {
+              caption = rec.caption;
+            }
+
+            const dataUrl = bufferToDataUrl(it.imageObj.buffer, it.imageObj.extension);
+            model.photos.push({
+              dataUrl,
+              name: rec.name || '',
+              caption
+            });
+          }
         }
 
         sheetPhotosApplied = model.photos.length > 0;
