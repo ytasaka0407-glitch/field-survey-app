@@ -53,7 +53,7 @@ export function initCategoryUI(refs, callbacks) {
 
     const singleCol = document.createElement("div");
     const multiCol = document.createElement("div");
-    singleCol.innerHTML = `<h3 style="margin-bottom:8px;">指令センター項目</h3>`;
+    singleCol.innerHTML = `<h3 style="margin-bottom:8px;">消防本部項目</h3>`;
     multiCol.innerHTML = `<h3 style="margin-bottom:8px;">基地局項目</h3>`;
 
     const singleList = document.createElement("div"); singleList.className = "category-list";
@@ -192,4 +192,5 @@ export function initCategoryUI(refs, callbacks) {
   bindEnterToButton(newStationInput, addStationBtn);
 
   return { renderCategorySelector };
+
 }
