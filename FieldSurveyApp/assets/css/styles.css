@@ -127,7 +127,7 @@ textarea { min-height: 96px; resize: vertical; } /* 高さのみ変更可能（�
 .floating-controls {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 1000;
   background: rgba(255,255,255,0.95);
   border: 1px solid var(--border);
@@ -140,7 +140,10 @@ textarea { min-height: 96px; resize: vertical; } /* 高さのみ変更可能（�
 }
 @media (max-width: 720px) {
   .floating-controls {
-    left: 8px; right: 8px; bottom: 8px; justify-content: space-between;
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    justify-content: space-between;
   }
 }
 
