@@ -133,6 +133,23 @@ export function bootstrapApp() {
   });
 
   // 画面クリア（iPhone対策：touchendも拾う。二重発火はガード）
+  const doClear = () => {
+    const ok = window.confirm('現在表示されている内容が全て消えますが、よろしいですか？');
+    if (!ok) return;
+
+    // 表紙入力もクリア
+    projectTitleEl.value = '';
+    projectDateEl.value = '';
+    setProjectDatePrev('');
+
+    // stateクリア → 初期化
+    resetAllState();
+
+    // 再描画
+    catUI.renderCategorySelector();
+    blocks.renderCategories();
+  };
+  
   let clearFiring = false;
 
   const fireClear = (e) => {
