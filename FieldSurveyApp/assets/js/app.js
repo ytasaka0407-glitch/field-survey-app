@@ -147,11 +147,10 @@ export function bootstrapApp() {
     blocks.renderCategories();
   };
 
-  // mobile対策：clickだけでなくpointerでも拾う
-  clearBtn?.addEventListener('click', (e) => { e.preventDefault(); doClear(); });
-  clearBtn?.addEventListener('pointerup', (e) => { e.preventDefault(); doClear(); });
-  // さらに古い環境保険
-  clearBtn?.addEventListener('touchend', (e) => { e.preventDefault(); doClear(); }, { passive: false });
+  clearBtn?.addEventListener('pointerup', (e) => {
+    e.preventDefault();
+    doClear();
+  });
 
 }
 
