@@ -133,22 +133,25 @@ export function bootstrapApp() {
   });
 
   // 画面クリア
-  clearBtn?.addEventListener('click', async () => {
-    const ok = confirm('現在表示されている内容が全て消えますが、よろしいですか？');
+  const doClear = () => {
+    console.log('[clear] fired');
+    const ok = window.confirm('現在表示されている内容が全て消えますが、よろしいですか？');
     if (!ok) return;
 
-    // 表紙入力もクリア
     projectTitleEl.value = '';
     projectDateEl.value = '';
     setProjectDatePrev('');
 
-    // stateクリア → 初期化
     resetAllState();
-
-    // 再描画
     catUI.renderCategorySelector();
     blocks.renderCategories();
-  });
+  };
+
+  // mobile対策：clickだけでなくpointerでも拾う
+  clearBtn?.addEventListener('click', (e) => { e.preventDefault(); doClear(); });
+  clearBtn?.addEventListener('pointerup', (e) => { e.preventDefault(); doClear(); });
+  // さらに古い環境保険
+  clearBtn?.addEventListener('touchend', (e) => { e.preventDefault(); doClear(); }, { passive: false });
 
 }
 
