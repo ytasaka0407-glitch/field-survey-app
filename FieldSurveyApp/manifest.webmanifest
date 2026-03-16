@@ -1,8 +1,8 @@
 {
   "name": "現地調査レポートツール",
   "short_name": "調査レポート",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/field-survey-app/",
+  "scope": "/field-survey-app/",
   "display": "standalone",
   "background_color": "#f7f8fa",
   "theme_color": "#2d7ef7",
