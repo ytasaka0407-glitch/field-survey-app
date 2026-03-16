@@ -140,4 +140,11 @@ export function removeSharedStationById(stationId) {
   });
 }
 export function setProjectDatePrev(v) { projectDatePrev = v || ""; }
+export function resetAllState() {
+  Object.keys(dataMap).forEach(k => delete dataMap[k]);
+  selectedCategories.clear();
+  sharedStations.splice(0, sharedStations.length);
+  projectDatePrev = "";
+  initDefaults();
+}
 
