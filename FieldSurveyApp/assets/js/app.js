@@ -132,25 +132,29 @@ export function bootstrapApp() {
     }
   });
 
-  // 画面クリア
-  const doClear = () => {
-    console.log('[clear] fired');
-    const ok = window.confirm('現在表示されている内容が全て消えますが、よろしいですか？');
-    if (!ok) return;
+  // 画面クリア（iPhone対策：touchendも拾う。二重発火はガード）
+  let clearFiring = false;
 
-    projectTitleEl.value = '';
-    projectDateEl.value = '';
-    setProjectDatePrev('');
-
-    resetAllState();
-    catUI.renderCategorySelector();
-    blocks.renderCategories();
+  const fireClear = (e) => {
+    if (e) e.preventDefault();
+    if (clearFiring) return;
+    clearFiring = true;
+    try {
+      doClear();
+    } finally {
+      // 同一ジェスチャで click/touch/pointer が連続発火しても1回にする
+      setTimeout(() => { clearFiring = false; }, 400);
+    }
   };
 
-  clearBtn?.addEventListener('pointerup', (e) => {
-    e.preventDefault();
-    doClear();
-  });
+  // PC/Android はこちらが効くことが多い
+  clearBtn?.addEventListener('pointerup', fireClear);
 
+  // iPhone(iOS Safari) の保険
+  clearBtn?.addEventListener('touchend', fireClear, { passive: false });
+
+  // さらに最後の保険（pointer/touchが効かない環境向け）
+  clearBtn?.addEventListener('click', fireClear);
+  
 }
 
