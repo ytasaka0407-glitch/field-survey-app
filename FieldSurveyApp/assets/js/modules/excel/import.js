@@ -369,6 +369,10 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
           if (it && it.imageObj && it.imageObj.buffer) {
             dataUrl = bufferToDataUrl(it.imageObj.buffer, it.imageObj.extension);
           }
+          // 画像が無い（削除済み等）場合は「その箇所は読み込まない」
+          if (!dataUrl || !String(dataUrl).startsWith('data:image/')) {
+            continue;
+          }
           let caption = captionByRow.get(rec.imgRowStart) || rec.caption || '';
           if (caption && model.diagramNgReason && caption === model.diagramNgReason && rec.caption) {
             caption = rec.caption;
@@ -390,6 +394,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       const recs = photosByKey.get(key);
       if (Array.isArray(recs) && recs.length) {
         for (const rec of recs) {
+          if (!rec.dataUrl || !String(rec.dataUrl).startsWith('data:image/')) continue;
           model.photos.push({
             dataUrl: rec.dataUrl || '',
             name: rec.name || '',
