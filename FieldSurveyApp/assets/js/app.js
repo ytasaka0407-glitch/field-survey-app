@@ -1,4 +1,4 @@
-import { initDefaults, dataMap, selectedCategories, sharedStations, setSharedStations, setProjectDatePrev, ensureSingle, ensureMulti, getOrInitStationData } from './modules/state.js';
+import { initDefaults, dataMap, selectedCategories, sharedStations, setSharedStations, setProjectDatePrev, ensureSingle, ensureMulti, getOrInitStationData, resetAllState } from './modules/state.js';
 import { initCategoryUI } from './modules/ui/categories.js';
 import { initBlocksUI } from './modules/ui/blocks.js';
 import { saveDraft, loadDraft, migrateSharedStationsFromLegacy, hydratePhotosFromIDB } from './modules/storage.js';
@@ -16,6 +16,7 @@ export function bootstrapApp() {
   const addMultiCategoryBtn = document.getElementById("addMultiCategoryBtn");
   const singleCatsContainer = document.getElementById("singleCatsContainer");
   const multiStationsContainer = document.getElementById("multiStationsContainer");
+  const clearBtn = document.getElementById('clearBtn');
   const saveBtn = document.getElementById("saveBtn");
   const loadBtn = document.getElementById("loadBtn");
   const exportExcelBtn = document.getElementById("exportExcelBtn");
@@ -129,6 +130,24 @@ export function bootstrapApp() {
       console.error(err);
       alert('Excelの読み込みに失敗しました。ファイル形式とフォーマットをご確認ください。');
     }
+  });
+
+  // 画面クリア
+  clearBtn?.addEventListener('click', async () => {
+    const ok = confirm('現在表示されている内容が全て消えますが、よろしいですか？');
+    if (!ok) return;
+
+    // 表紙入力もクリア
+    projectTitleEl.value = '';
+    projectDateEl.value = '';
+    setProjectDatePrev('');
+
+    // stateクリア → 初期化
+    resetAllState();
+
+    // 再描画
+    catUI.renderCategorySelector();
+    blocks.renderCategories();
   });
 
 }
