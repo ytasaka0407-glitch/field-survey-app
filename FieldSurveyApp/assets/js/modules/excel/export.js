@@ -262,6 +262,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     // 写真セクション（左右分割）
     let startRow = nextRow + 1;
     const photos = Array.isArray(entry.model.photos) ? entry.model.photos : [];
+    const validPhotos = photos.filter(p => p?.dataUrl && String(p.dataUrl).startsWith('data:image/'));
 
     const IMAGE_COLS = ['B','C','D','E','F'];
     const DESC_COL_START = 'G';
@@ -278,8 +279,8 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
     const containerW = sumColPixels(IMAGE_COLS);
 
-    for (let i = 0; i < photos.length; i++) {
-      const p = photos[i];
+    for (let i = 0; i < validPhotos.length; i++) {
+      const p = validPhotos[i];
 
       // ブロックの高さを確保
       for (let r = startRow; r < startRow + BLOCK_ROWS; r++) {
