@@ -1,5 +1,5 @@
 // service-worker.js (root)
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 // サイトルート基準のパスを列挙（存在しないものは取り除いてOK）
@@ -71,9 +71,16 @@ self.addEventListener('fetch', (event) => {
   // ページ遷移（HTML）
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).catch(() =>
-        caches.match(new URL('./index.html', self.registration.scope).href)
-      )
+      (async () => {
+        try {
+          const res = await fetch(req);
+          // 404等でもSPA/PWAとして index.html に戻す
+          if (res && res.ok) return res;
+        } catch (e) {
+          // ネットワーク失敗時もフォールバック
+        }
+        return caches.match(new URL('./index.html', self.registration.scope).href);
+      })()
     );
     return;
   }
