@@ -62,3 +62,16 @@ export async function getPhotoDataUrl(id) {
   if (!rec || !rec.blob) return '';
   return await blobToDataUrl(rec.blob);
 }
+
+export async function clearAllPhotos() {
+  const db = await openDB();
+  const tx = db.transaction(STORE, 'readwrite');
+  const store = tx.objectStore(STORE);
+  await new Promise((res, rej) => {
+    const req = store.clear();
+    req.onsuccess = () => res();
+    req.onerror = () => rej(req.error);
+  });
+  await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  db.close();
+}
