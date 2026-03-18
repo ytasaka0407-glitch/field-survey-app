@@ -4,6 +4,7 @@ import { initBlocksUI } from './modules/ui/blocks.js';
 import { saveDraft, loadDraft, migrateSharedStationsFromLegacy, hydratePhotosFromIDB } from './modules/storage.js';
 import { exportToExcel } from './modules/excel/export.js';
 import { importFromExcel } from './modules/excel/import.js';
+import { clearAllPhotos } from './modules/idb-photos.js';
 
 export function bootstrapApp() {
   // DOM参照
@@ -121,6 +122,10 @@ export function bootstrapApp() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
+      // 既存データを全破棄（期待仕様 b）
+      resetAllState();
+      await clearAllPhotos();
+      
       await importFromExcel(file, projectTitleEl, projectDateEl, setProjectDatePrev);
       catUI.renderCategorySelector();
       blocks.renderCategories();
