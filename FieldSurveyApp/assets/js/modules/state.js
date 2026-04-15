@@ -84,6 +84,7 @@ export function ensureMulti(cat, projectDate) {
         diagramNgReason: "",
         details: "",
         photos: [],
+        _excluded: false,
       };
     } else {
       const v = dataMap[cat].stationData[st.id];
@@ -98,6 +99,7 @@ export function ensureMulti(cat, projectDate) {
       v.diagramStatus = v.diagramStatus || "ok";
       v.diagramNgReason = v.diagramNgReason || "";
       v.photos = Array.isArray(v.photos) ? v.photos : [];
+      v._excluded = !!v._excluded;
     }
   });
   return dataMap[cat];
