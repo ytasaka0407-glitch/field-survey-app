@@ -360,6 +360,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
   for (const e of entries) {
     wsToc.getCell(`A${tocRow}`).value = { text: e.displayLabel, hyperlink: `#'${e.sheetName}'!A1` };
     wsToc.getCell(`A${tocRow}`).style = linkStyle;
+    wsToc.getCell(`A${tocRow}`).alignment = { horizontal: 'left', vertical: 'middle' };
     const photosCount = Array.isArray(e.model.photos) ? e.model.photos.length : 0;
     wsToc.getCell(`B${tocRow}`).value = `写真 ${photosCount}枚`;
     wsToc.getCell(`B${tocRow}`).font  = { name: 'Meiryo UI' };
