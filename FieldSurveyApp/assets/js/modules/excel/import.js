@@ -6,6 +6,7 @@ import {
   selectedCategories,
   addSharedStation,
   sharedStations,
+  dataMap,
 } from '../state.js';
 import { toInputDateString, stationIdFromName } from '../utils.js';
 import { getSchemaFor } from '../ui/schemas.js';
@@ -173,6 +174,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
   }
 
   // カテゴリシート 読み取り
+  const presentMulti = new Set(); // key = `${catName}|${stationId}`
   for (const ws of wb.worksheets) {
     if (!ws) continue;
     const name = ws.name;
@@ -215,6 +217,7 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
       }
       model = getOrInitStationData(catName, stId, projectDateEl.value || "");
       selectedCategories.add(catName);
+      presentMulti.add(`${catName}|${stId}`);
     } else {
       model = ensureSingle(catName, projectDateEl.value || "");
       selectedCategories.add(catName);
@@ -439,6 +442,18 @@ export async function importFromExcel(file, projectTitleEl, projectDateEl, setPr
         let caption = readCaptionFromSheet(ws, start, ROWS_PER_CAPTION);
         model.photos.push({ dataUrl, name: '', caption });
       }
+    }
+  }
+ 
+  // --- 追加: シートが存在しない multi（カテゴリ×基地局）は除外ONにする ---
+  const allMultiCats = [...selectedCategories].filter(c => (dataMap[c]?.mode) === 'multi');
+  const pjDate = projectDateEl.value || "";
+  for (const cat of allMultiCats) {
+    ensureMulti(cat, pjDate);
+    for (const st of sharedStations) {
+      const stData = getOrInitStationData(cat, st.id, pjDate);
+      const key = `${cat}|${st.id}`;
+      stData._excluded = !presentMulti.has(key);
     }
   }
 }
