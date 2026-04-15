@@ -102,6 +102,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
     for (const cat of multiCatsSorted) {
       const mv = ensureMulti(cat, projectDateStr);
       const stData = getOrInitStationData(cat, st.id, projectDateStr);
+      if (stData._excluded) continue;
       multiEntries.push({
         type: 'multi',
         cat,
