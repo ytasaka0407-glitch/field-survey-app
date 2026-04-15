@@ -150,6 +150,10 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
     ws.getCell('A1').value = entry.displayLabel;
     ws.getCell('A1').style = sectionTitleStyle;
+    // 目次へ戻るリンク
+    ws.getCell('J1').value = { text: '目次へ戻る', hyperlink: `#'目次'!A1` };
+    ws.getCell('J1').style = linkStyle;
+    ws.getCell('J1').alignment = { horizontal: 'right', vertical: 'middle' };
 
     // 基本項目（並び: 調査日, 設置場所, 新設/既設, 設置方法(新設時), OK/NG, NG理由(NG時), その他調査内容）
     // 調査日
