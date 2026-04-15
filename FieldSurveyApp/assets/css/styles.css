@@ -188,3 +188,13 @@ input::placeholder, textarea::placeholder {
 .btn.mint:hover { filter: brightness(0.96); }
 
 .btn.mint:active { transform: scale(0.98); }
+
+/* 除外された基地局カテゴリのカード表示 */
+.card.is-excluded{
+  background: #f3f4f6;     /* グレー */
+  border-color: #d1d5db;
+  box-shadow: none;
+}
+.card.is-excluded .subsection-title{
+  color: #555;
+}
