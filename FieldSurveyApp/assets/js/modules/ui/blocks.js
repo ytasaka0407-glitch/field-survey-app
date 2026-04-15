@@ -45,6 +45,7 @@ export function initBlocksUI(refs) {
       const seg = document.createElement('div');
       seg.className = 'card';
       seg.style.margin = '8px 0';
+      seg.classList.toggle('is-excluded', !!stData._excluded);
       const title = document.createElement('div');
       title.className = 'subsection-title';
       // タイトル行（カテゴリ名  除外チェック）
