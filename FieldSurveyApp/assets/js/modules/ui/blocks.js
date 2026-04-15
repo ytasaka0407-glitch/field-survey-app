@@ -47,14 +47,33 @@ export function initBlocksUI(refs) {
       seg.style.margin = '8px 0';
       const title = document.createElement('div');
       title.className = 'subsection-title';
-      title.textContent = cat; // ← escapeHtmlは不要（textContent）
+      // タイトル行（カテゴリ名  除外チェック）
+      title.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div>${escapeHtml(cat)}</div>
+          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:normal; font-size:13px;">
+            <input type="checkbox" data-exclude />
+            除外
+          </label>
+        </div>`;
       seg.appendChild(title);
-      const inner = document.createElement('div');
-      seg.appendChild(inner);
-      schema.forEach(field => {
-        const fid = `${field.key}_${idBase}`;
-        renderField(inner, stData, field, fid);
+
+      const excludeCb = title.querySelector('input[data-exclude]');
+      excludeCb.checked = !!stData._excluded;
+      excludeCb.addEventListener('change', (e) => {
+        stData._excluded = !!e.target.checked;
+        // その場で最小化/復帰させたいので再描画
+        renderCategories();
       });
+      // 除外時はフォームを描画しない（= 除外チェック欄だけになる）
+      if (!stData._excluded) {
+        const inner = document.createElement('div');
+        seg.appendChild(inner);
+        schema.forEach(field => {
+          const fid = `${field.key}_${idBase}`;
+          renderField(inner, stData, field, fid);
+        });
+      }
       wrap.appendChild(seg);
     });
     return wrap;
