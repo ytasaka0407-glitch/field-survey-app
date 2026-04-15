@@ -1,5 +1,5 @@
 // service-worker.js (root)
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
 // サイトルート基準のパスを列挙（存在しないものは取り除いてOK）
