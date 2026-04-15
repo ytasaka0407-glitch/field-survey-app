@@ -28,9 +28,18 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
   // 表紙
   const wsCover = wb.addWorksheet('表紙', {
-    pageSetup: { paperSize: 9, orientation: 'portrait', margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 } },
+    pageSetup: {
+      paperSize: 9,
+      orientation: 'portrait',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 1,
+      margins: { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 }
+    },
     headerFooter: { oddFooter: '&Rページ &P / &N' }
   });
+  wsCover.views = [{ showGridLines: false }];
+  
   for (let i = 1; i <= 12; i++) wsCover.getColumn(i).width = 16;
   wsCover.mergeCells('A3:H6');
   wsCover.getCell('A3').value = '現地調査報告書';
@@ -45,6 +54,7 @@ export async function exportToExcel(projectTitle, projectDate, sharedStations) {
 
   // 目次
   const wsToc = wb.addWorksheet('目次', { pageSetup: { paperSize: 9, orientation: 'portrait' }, headerFooter: { oddFooter: '&Rページ &P / &N' } });
+  wsToc.views = [{ showGridLines: false }];
   wsToc.getColumn(1).width = 50;
   wsToc.getColumn(2).width = 18;
   wsToc.getCell('A1').value = '目次';
